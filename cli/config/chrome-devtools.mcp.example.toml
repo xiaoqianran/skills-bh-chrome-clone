@@ -1,0 +1,18 @@
+# Drop-in chrome-devtools MCP config for Grok / similar TOML clients.
+# Connects to the bh-clone session twin — NOT main Chrome auto-connect.
+#
+# Prerequisites:
+#   bh-clone ensure
+#   bh-clone sync   # when login cookies needed
+# Then restart the MCP host (Grok session / IDE).
+
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = [
+    "-y",
+    "chrome-devtools-mcp@latest",
+    "--browserUrl",
+    "http://127.0.0.1:9333",
+]
+enabled = true
+startup_timeout_sec = 90

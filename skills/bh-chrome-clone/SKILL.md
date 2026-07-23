@@ -1,49 +1,48 @@
 ---
 name: bh-chrome-clone
-description: "Use a dedicated Chrome clone with synced login cookies for browser-harness automation — avoid Allow-remote-debugging popups on the main browser. Use when: browser-harness tasks need login state, unattended automation, bilibili/session sites, or user asks for Chrome clone/session twin / bh-clone."
+description: "Chrome session twin for browser-harness and chrome-devtools MCP: copy login cookies into a dedicated CDP browser (:9333), avoid main-browser Allow popups. Use when: authenticated automation, bilibili/session sites, bh-clone, or configuring chrome-devtools without auto-connect."
 ---
 
 # bh-chrome-clone
 
-Reusable **session twin** for [browser-harness](https://github.com/browser-use/browser-harness):
+One **automation Chrome** (session twin) shared by:
 
-- **Main Chrome** = daily browser (may prompt *Allow remote debugging?*)
-- **Clone Chrome** = automation profile on CDP `:9333` (no Allow popup)
-- Login is kept by **CDP cookie export → inject** (plain profile rsync alone is not enough)
+| Client | How it connects |
+|--------|-----------------|
+| **browser-harness** | `export BU_CDP_URL=http://127.0.0.1:9333` |
+| **chrome-devtools MCP** | `--browserUrl http://127.0.0.1:9333` (**not** `--auto-connect`) |
 
-CLI: `bh-clone` (install from this repo’s `cli/`).
+Cookies come from the user's **main** Chrome via CDP export → inject (profile rsync alone is not enough).
+
+CLI: `bh-clone` (install from this repo).
 
 ## When to use
 
 | Situation | Action |
 |-----------|--------|
-| Need logged-in automation without blocking the user | `bh-clone ensure` + `BU_CDP_URL=http://127.0.0.1:9333` |
-| Clone returns 未登录 / API `isLogin:false` | `bh-clone sync` (user may click Allow **once** on main) |
-| First machine setup | `bh-clone init` |
-| Need the exact live tab strip | `bh-clone use main` (Allow may appear) |
-| Public page / plain HTTP enough | Do **not** use browser; use fetch/curl |
+| Need logged-in automation | `bh-clone up` then harness / chrome-devtools |
+| `isLogin:false` / 未登录 | `bh-clone sync` (Allow **once** on main if prompted) |
+| First machine setup | `bh-clone init` then `bh-clone mcp install-grok` |
+| chrome-devtools still on main | `bh-clone mcp install-grok` + restart MCP host |
+| Public static page | Prefer curl/fetch — no browser |
 
 ## Prerequisites
 
 ```bash
-# browser-harness
 uv tool install --python 3.12 --upgrade browser-harness
-
-# this skill's CLI
-./install.sh   # from repo root → ~/.local/bin/bh-clone + skill link
+./install.sh   # from repo root
 ```
 
-Chrome/Chromium must be installed. Main profile default: `~/.config/google-chrome`.
+Chrome/Chromium required. Main profile default: `~/.config/google-chrome`.
 
 ## Agent workflow
 
-### 1. Prefer clone for multi-step browser work
+### A. browser-harness
 
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
-bh-clone ensure
-# shell that sources env, or:
+bh-clone ensure   # or: bh-clone up
 export BU_CDP_URL=http://127.0.0.1:9333
+# optional: source ~/.config/browser-harness/env
 
 browser-harness <<'PY'
 ensure_real_tab()
@@ -51,95 +50,55 @@ print(page_info())
 PY
 ```
 
-### 2. If login missing — resync (do not invent cookies)
+### B. chrome-devtools MCP
+
+1. `bh-clone ensure`
+2. MCP config must use clone URL only:
 
 ```bash
-bh-clone sync
-# Optional full profile refresh (stops clone briefly):
-# bh-clone sync --with-profile
+bh-clone mcp print
+bh-clone mcp install-grok   # Grok ~/.grok/config.toml
+# restart Grok / IDE so MCP reloads
 ```
 
-Main Chrome may show **Allow remote debugging?** — ask the user to click **Allow once**. Do not spam reconnects.
+Expected args: `--browserUrl http://127.0.0.1:9333`  
+Forbidden for this skill: `--auto-connect` to daily Chrome.
 
-### 3. Verify before scraping authenticated pages
+### C. Health
 
 ```bash
 bh-clone doctor
 ```
 
-Or:
+Checks: clone CDP, cookie file, harness bilibili login, Grok MCP pointing at clone.
+
+### D. Site adapters (optional)
 
 ```bash
-export BU_CDP_URL=http://127.0.0.1:9333
-browser-harness <<'PY'
-new_tab("https://api.bilibili.com/x/web-interface/nav")
-wait_for_load()
-print(js("document.body.innerText")[:300])
-PY
-```
-
-Expect `"isLogin":true` for bilibili when cookies are valid.
-
-### 4. Site data (bilibili etc.)
-
-Prefer site adapters when available:
-
-```bash
-opencli bilibili search "query" -f json
 opencli bilibili subtitle BVxxxx -f json
 opencli bilibili summary BVxxxx -f json
 ```
 
-Use browser-harness on the **clone** for UI flows adapters do not cover.
-
-## chrome-devtools MCP on the same clone
-
-Do **not** configure chrome-devtools with `--auto-connect` to the main browser.
-
-Use the clone CDP instead (same cookies as browser-harness):
-
-```toml
-[mcp_servers.chrome-devtools]
-command = "npx"
-args = [
-    "-y",
-    "chrome-devtools-mcp@latest",
-    "--browserUrl",
-    "http://127.0.0.1:9333",
-]
-```
-
-Always `bh-clone ensure` before the MCP starts. Full notes: `references/chrome-devtools-mcp.md`.
-
 ## Critical rules
 
-1. **Never print or commit cookie dumps.** File default: `~/.config/browser-harness/main-cookies.json` (mode `600`).
-2. **Do not** share the clone profile directory; it holds session power.
-3. Prefer **clone** for automation; **main** only for live tabs / one-off human-paced work.
-4. Cookie-only sync: sites that store auth only in localStorage may need `bh-clone sync --with-profile` or a manual login inside the clone.
-5. This is a **Skill + CLI**, not an MCP. Browser control stays in browser-harness / chrome-devtools / opencli — but chrome-devtools should attach to the **clone**, not auto-connect main.
+1. **Never print or commit** `~/.config/browser-harness/main-cookies.json`.
+2. Prefer **clone** for automation; **main** only for live human tabs (`bh-clone use main`).
+3. Do not spam main CDP if Allow popup appears — ask user to click Allow once.
+4. Start clone **before** chrome-devtools MCP connects (`bh-clone ensure` / `up`).
+5. Skill + CLI only — not a new MCP server. Existing MCP is chrome-devtools attached to the twin.
 
-## Commands cheat sheet
+## Command map
 
 ```text
-bh-clone init
-bh-clone sync [--with-profile]
-bh-clone ensure
+bh-clone init | sync [--with-profile] | ensure | up [--sync]
 bh-clone use clone|main
+bh-clone mcp print|json|install-grok|check
 bh-clone doctor
-bh-clone version
-```
-
-## Layout in this repo
-
-```text
-skills/bh-chrome-clone/SKILL.md   ← this file
-cli/                              ← bh-clone implementation
-references/                       ← design + verification notes
 ```
 
 ## See also
 
-- Upstream harness: https://github.com/browser-use/browser-harness
-- Design notes: `../../docs/design.md`
-- Verified run log: `../../references/verification.md`
+- `references/chrome-devtools-mcp.md`
+- `references/architecture.md`
+- `docs/design.md`
+- `AGENTS.md`

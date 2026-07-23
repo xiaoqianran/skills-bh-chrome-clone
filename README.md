@@ -1,61 +1,88 @@
 # skills-bh-chrome-clone
 
-**Agent Skill + CLI** for a **Chrome session twin** used with [browser-harness](https://github.com/browser-use/browser-harness).
+**Agent Skill + CLI** — 把主 Chrome 的登录态同步到**独立自动化浏览器**（CDP `:9333`），同时给：
 
-> 把「主 Chrome 登录态」同步到「自动化 Clone（CDP `:9333`）」，免去主浏览器反复 **Allow remote debugging?** 弹窗。
+1. **[browser-harness](https://github.com/browser-use/browser-harness)**  
+2. **[chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp)**  
 
-| 形态 | 说明 |
-|------|------|
-| **Skill** | `skills/bh-chrome-clone/SKILL.md` — 教 Agent 何时 sync / ensure / 用 clone |
-| **CLI** | `bh-clone` — 可复用脚本（非 MCP） |
-| **不是** | 完整克隆浏览器指纹；不是 MCP server |
+用，**不要**对日常主浏览器 `--auto-connect`。
 
-## Why Skill, not MCP?
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-- 低频运维流水线（init/sync），不是原子 click/fill。
-- Cookie 同步副作用大，适合显式 CLI + Agent 规范。
-- 真正的页面控制继续用 browser-harness / chrome-devtools / opencli。
+---
 
-## Verified (2026-07-23)
+## 一张图
 
-Local retest passed:
+```text
+                    ┌─────────────────────────┐
+                    │  Main Chrome (日常)      │
+                    │  登录 / 真标签           │
+                    └───────────┬─────────────┘
+                                │ CDP 导出 Cookie（可弹一次 Allow）
+                                ▼
+                    ┌─────────────────────────┐
+                    │  Clone Chrome :9333      │
+                    │  profile + 注入 Cookie   │
+                    └───────────┬─────────────┘
+                     ┌──────────┴──────────┐
+                     ▼                     ▼
+            browser-harness         chrome-devtools MCP
+            BU_CDP_URL=...:9333     --browserUrl ...:9333
+```
 
-- `bh-clone ensure` → CDP `:9333` ready  
-- Bilibili API `"isLogin": true`  
-- Search `清华学生如何学习` returned real video titles on clone  
+---
 
-Details: [references/verification.md](references/verification.md)
+## 为什么
 
-## Quick start
+| 方式 | 登录态 | Allow 弹窗 | 适合 |
+|------|--------|------------|------|
+| 附着主 Chrome / `--auto-connect` | 有 | 常有 | 临时调试 |
+| 空 profile | 无 | 无 | 匿名 |
+| **本项目 Clone** | Cookie 同步后有 | **Clone 上无** | 无人值守 + 双客户端 |
 
-### Dependencies
+> 只 `rsync` profile **不够**：磁盘 Cookie 加密，clone 常丢掉 `SESSDATA`。必须 **CDP 明文导出再注入**。
+
+---
+
+## 完整安装（从头到尾）
+
+### 0. 依赖
+
+- Google Chrome / Chromium  
+- [uv](https://github.com/astral-sh/uv) + Python 3.12  
+- `curl` `rsync` `bash` `python3`  
+- （可选）Grok / 其他 MCP 宿主  
 
 ```bash
-# Chrome/Chromium installed
 uv tool install --python 3.12 --upgrade browser-harness
 ```
 
-### Install this repo
+### 1. 安装本仓库
 
 ```bash
 git clone https://github.com/xiaoqianran/skills-bh-chrome-clone.git
 cd skills-bh-chrome-clone
 ./install.sh
-# ensures ~/.local/bin/bh-clone and links skill into ~/.grok/skills (and ~/.codex/skills if present)
+# → ~/.local/bin/bh-clone
+# → ~/.grok/skills/bh-chrome-clone（及 codex/claude 若存在）
 ```
 
-### First-time session twin
+确保 `~/.local/bin` 在 `PATH` 中。
+
+### 2. 首次建立 session twin
 
 ```bash
-bh-clone init          # profile rsync + cookie sync (main may ask Allow once)
-bh-clone doctor        # should show bilibili isLogin when cookies valid
+bh-clone init
+# 主 Chrome 可能提示 Allow remote debugging — 点一次 Allow
+bh-clone doctor
 ```
 
-### Daily automation
+### 3. 配置 browser-harness
 
 ```bash
-bh-clone ensure
-export BU_CDP_URL=http://127.0.0.1:9333   # or: source ~/.config/browser-harness/env
+bh-clone up
+export BU_CDP_URL=http://127.0.0.1:9333
+# 或: source ~/.config/browser-harness/env
 
 browser-harness <<'PY'
 new_tab("https://www.bilibili.com/")
@@ -63,76 +90,19 @@ print(page_info())
 PY
 ```
 
-### Login expired
+### 4. 配置 chrome-devtools MCP（关键）
+
+**不要**再写 `--auto-connect` 连主浏览器。
 
 ```bash
-bh-clone sync
-# full profile refresh:
-bh-clone sync --with-profile
+bh-clone mcp print              # 查看 TOML
+bh-clone mcp install-grok       # 写入 ~/.grok/config.toml
+# 然后【重启 Grok / MCP 宿主】使配置生效
 ```
 
-## CLI
-
-```text
-bh-clone init
-bh-clone sync [--with-profile]
-bh-clone ensure
-bh-clone use clone|main
-bh-clone doctor
-bh-clone version
-```
-
-## Layout
-
-```text
-skills-bh-chrome-clone/
-├── skills/bh-chrome-clone/SKILL.md   # Agent skill
-├── cli/                              # bh-clone implementation
-│   ├── bin/bh-clone
-│   ├── lib/common.sh
-│   └── scripts/
-├── references/                       # architecture + verification
-├── docs/                             # design notes
-├── install.sh                        # CLI + skill install
-└── README.md
-```
-
-## Security
-
-- Cookie dump: `~/.config/browser-harness/main-cookies.json` (**mode 600**, gitignored patterns in `cli/.gitignore`)
-- Never commit cookies or profile copies
-- Clone profile is a second set of session keys — keep local
-
-## How it works
-
-```text
-Main Chrome  --CDP Network.getAllCookies-->  cookies.json
-                                                 |
-Clone :9333  <-- Storage.setCookies -------------+
-     ^
-     | BU_CDP_URL
-browser-harness
-```
-
-Plain `rsync` of the profile often **drops** encrypted `SESSDATA`. CDP inject fixes that.
-
-See [docs/design.md](docs/design.md) and [references/architecture.md](references/architecture.md).
-
-## Agent install (manual)
-
-Copy or symlink the skill:
-
-```bash
-mkdir -p ~/.grok/skills
-ln -sfn "$PWD/skills/bh-chrome-clone" ~/.grok/skills/bh-chrome-clone
-```
-
-## chrome-devtools MCP (same clone, no auto-connect)
-
-Do **not** use `--auto-connect` on your daily Chrome. Point MCP at the twin:
+等价手写：
 
 ```toml
-# ~/.grok/config.toml
 [mcp_servers.chrome-devtools]
 command = "npx"
 args = [
@@ -145,9 +115,85 @@ enabled = true
 startup_timeout_sec = 90
 ```
 
-Order: `bh-clone ensure` → (optional `bh-clone sync`) → restart MCP/session → use chrome-devtools tools.
+JSON 客户端：`bh-clone mcp json` 或 `cli/config/chrome-devtools.mcp.example.json`。
 
-Details: [references/chrome-devtools-mcp.md](references/chrome-devtools-mcp.md)
+### 5. 日常
+
+```bash
+bh-clone up              # 确保 clone 在跑 + 写 harness env
+# 登录过期：
+bh-clone sync
+# 或
+bh-clone up --sync
+
+bh-clone doctor          # CDP + harness 登录 + MCP 配置检查
+```
+
+---
+
+## CLI 一览
+
+```text
+bh-clone init
+bh-clone sync [--with-profile]
+bh-clone ensure
+bh-clone up [--sync]              # 双客户端就绪
+bh-clone use clone|main
+
+bh-clone mcp print|json|install-grok|check
+bh-clone doctor
+bh-clone version                  # 0.2.x
+```
+
+---
+
+## 仓库结构
+
+```text
+skills-bh-chrome-clone/
+├── skills/bh-chrome-clone/SKILL.md   # Agent Skill
+├── cli/                              # bh-clone 实现
+│   ├── bin/bh-clone
+│   ├── lib/common.sh
+│   ├── scripts/                      # init sync ensure up doctor mcp-config
+│   └── config/                       # MCP / env 示例
+├── references/                       # 架构 / 验证 / MCP 说明
+├── docs/design.md
+├── AGENTS.md
+├── install.sh
+└── README.md
+```
+
+---
+
+## 双客户端对照
+
+| | browser-harness | chrome-devtools MCP |
+|--|-----------------|---------------------|
+| 连接 | `BU_CDP_URL` | `--browserUrl` |
+| 配置命令 | `bh-clone up` / `use clone` | `bh-clone mcp install-grok` |
+| 目标 | 脚本化控制、CDP helpers | 列表页/点击/网络/性能工具 |
+| 共用 | 同一 clone profile + `:9333` + Cookie 同步 | 同左 |
+
+---
+
+## 安全
+
+- Cookie 文件：`~/.config/browser-harness/main-cookies.json`（**600**）  
+- **勿提交** cookies / clone profile  
+- Clone = 第二份登录钥匙，仅本机使用  
+
+---
+
+## 验证（曾实测）
+
+见 [references/verification.md](references/verification.md)：
+
+- clone CDP ready  
+- bilibili `isLogin: true`  
+- 搜索「清华学生如何学习」有真实结果  
+
+---
 
 ## License
 

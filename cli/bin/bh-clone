@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# bh-clone — reusable Chrome session twin for browser-harness automation
+# bh-clone — Chrome session twin for browser-harness + chrome-devtools MCP
 set -euo pipefail
 
-# Resolve symlinks so `~/.local/bin/bh-clone` still finds the repo root.
+# Resolve symlinks so `~/.local/bin/bh-clone` still finds the package root (cli/).
 _SRC="${BASH_SOURCE[0]}"
 while [[ -L "${_SRC}" ]]; do
   _DIR="$(cd "$(dirname "${_SRC}")" && pwd)"
@@ -14,45 +14,51 @@ unset _SRC _DIR
 # shellcheck source=../lib/common.sh
 source "${ROOT}/lib/common.sh"
 
+VERSION="0.2.0"
+
 usage() {
-  cat <<'USAGE'
-bh-clone — Chrome session twin for browser-harness
+  cat <<USAGE
+bh-clone ${VERSION} — Chrome session twin (browser-harness + chrome-devtools)
+
+One automation Chrome on CDP :${BH_CDP_PORT} with cookies copied from your main
+browser. Avoids Allow-remote-debugging on daily Chrome.
 
 Usage:
   bh-clone <command> [args]
 
-Commands:
-  init                 First-time setup (profile rsync + cookie sync)
-  sync [--with-profile]
-                       Export cookies from main Chrome → inject clone
-                       --with-profile also rsyncs profile files
-  ensure               Start clone Chrome with CDP if not running
-  use clone|main       Switch browser-harness target
-  doctor               Health check (CDP, cookies, bilibili login)
-  status               Alias of doctor
-  version              Print version
-  help                 Show this help
+Setup & session
+  init                      First-time: profile rsync + cookie sync
+  sync [--with-profile]     Export cookies from main → inject clone
+  ensure                    Start clone Chrome if not running
+  up [--sync]               ensure + harness env (+ optional sync)
+  use clone|main            Switch browser-harness target env
+
+Clients
+  mcp print|json            Print chrome-devtools MCP config (clone browserUrl)
+  mcp install-grok          Write ~/.grok/config.toml for clone (no auto-connect)
+  mcp check                 Verify clone CDP is up for MCP
+
+Diagnostics
+  doctor | status           Health for paths, CDP, harness login, MCP config
+  version                   Print version
+  help                      This help
 
 Environment (optional):
   BH_MAIN_PROFILE   default: ~/.config/google-chrome
   BH_CLONE_PROFILE  default: ~/.config/browser-harness-chrome-clone
   BH_CDP_PORT       default: 9333
   BH_COOKIE_FILE    default: ~/.config/browser-harness/main-cookies.json
-  BH_ENV_FILE       default: ~/.config/browser-harness/env
 
-Examples:
+Quick start:
   bh-clone init
-  bh-clone sync
-  bh-clone use clone
-  export BU_CDP_URL=http://127.0.0.1:9333
+  bh-clone up
+  bh-clone mcp install-grok    # then restart Grok/MCP host
+  export BU_CDP_URL=http://127.0.0.1:${BH_CDP_PORT}
   browser-harness <<'PY'
-  new_tab("https://www.bilibili.com/")
   print(page_info())
   PY
 USAGE
 }
-
-VERSION="0.1.0"
 
 cmd="${1:-help}"
 shift || true
@@ -67,6 +73,9 @@ case "${cmd}" in
   ensure)
     bash "${ROOT}/scripts/ensure.sh" "$@"
     ;;
+  up)
+    bash "${ROOT}/scripts/up.sh" "$@"
+    ;;
   use)
     target="${1:-}"
     case "${target}" in
@@ -74,6 +83,9 @@ case "${cmd}" in
       main)           bash "${ROOT}/scripts/use-main.sh" ;;
       *) die "usage: bh-clone use clone|main" ;;
     esac
+    ;;
+  mcp)
+    bash "${ROOT}/scripts/mcp-config.sh" "$@"
     ;;
   doctor|status)
     bash "${ROOT}/scripts/doctor.sh" "$@"
