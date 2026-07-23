@@ -265,8 +265,11 @@ rsync_main_to_clone() {
 kill_clone_chrome() {
   # ONLY the automation twin. Never call this against the main profile.
   # See docs/HARD_RULES.md — killing MAIN Chrome drops user logins (e.g. grok.com).
+  #
+  # HARDENING: kill ONLY processes whose cmdline contains this clone's
+  # user-data-dir=. Never pkill by binary name. Never fuser -k by port
+  # (port-based kill could hit MAIN if ports collide, e.g. 9222).
   local profile="${BH_CLONE_PROFILE}"
-  local port="${BH_CDP_PORT}"
   assert_main_clone_distinct
   assert_not_main_profile "${profile}" "kill_clone_chrome"
 
@@ -276,16 +279,28 @@ kill_clone_chrome() {
     return 1
   fi
 
-  # Kill ONLY by user-data-dir match for the clone profile
-  local pids
+  # Refuse empty / too-short profile strings (would match too broadly)
+  if [[ ${#profile} -lt 12 ]]; then
+    die "refuse kill_clone: profile path too short (HARD_RULES): ${profile}"
+  fi
+
+  local pids pid cmdline
   pids="$(pgrep -f "user-data-dir=${profile}" 2>/dev/null || true)"
-  if [[ -n "${pids}" ]]; then
-    # shellcheck disable=SC2086
-    kill ${pids} 2>/dev/null || true
-    sleep 1
+  if [[ -z "${pids}" ]]; then
+    return 0
   fi
-  # Best-effort free clone CDP port only
-  if command -v fuser >/dev/null 2>&1; then
-    fuser -k "${port}/tcp" 2>/dev/null || true
-  fi
+  for pid in ${pids}; do
+    cmdline="$(tr '\0' ' ' <"/proc/${pid}/cmdline" 2>/dev/null || true)"
+    # Double-check: must contain clone user-data-dir AND must not look like default main profile only
+    if [[ "${cmdline}" != *"user-data-dir=${profile}"* ]]; then
+      continue
+    fi
+    if [[ "${cmdline}" == *"user-data-dir=${BH_MAIN_PROFILE}"* && "${profile}" != "${BH_MAIN_PROFILE}" ]]; then
+      # Should not happen if profiles differ; skip paranoid
+      continue
+    fi
+    kill "${pid}" 2>/dev/null || true
+  done
+  sleep 1
+  # NO fuser -k by port — that is banned (can kill MAIN on shared/wrong port).
 }

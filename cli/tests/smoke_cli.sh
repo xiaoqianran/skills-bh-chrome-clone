@@ -6,7 +6,7 @@ BH="${ROOT}/bin/bh-clone"
 REPO="$(cd "${ROOT}/.." && pwd)"
 
 echo "== version =="
-"${BH}" version | grep -qE 'bh-chrome-clone 0\.2\.4'
+"${BH}" version | grep -qE 'bh-chrome-clone 0\.2\.5'
 
 echo "== help cookie-only / hard rules =="
 help_out="$("${BH}" help)"
@@ -78,6 +78,24 @@ set -e
 [[ "${pref_rc}" -ne 0 ]] || { echo "expected refuse main pref write: ${pref_err}" >&2; exit 1; }
 echo "${pref_err}" | grep -qiE 'refuse|HARD_RULES|MAIN|main' \
   || { echo "expected refuse message: ${pref_err}" >&2; exit 1; }
+
+echo "== use main refused without opt-in =="
+if "${BH}" use main 2>/tmp/bh-use-main.err; then
+  echo "expected use main to refuse without BH_ALLOW_USE_MAIN=1" >&2
+  exit 1
+fi
+grep -qiE 'BH_ALLOW_USE_MAIN|refused' /tmp/bh-use-main.err
+
+echo "== no fuser -k command in kill_clone =="
+# Comments may mention fuser as banned; fail only on real invocation
+if awk '/^kill_clone_chrome\(/,/^}/' "${ROOT}/lib/common.sh" | grep -E '^[^#]*\bfuser\b' | grep -vq '^'; then
+  # any non-comment line containing fuser as a command
+  if awk '/^kill_clone_chrome\(/,/^}/' "${ROOT}/lib/common.sh" | grep -vE '^\s*#' | grep -qE '\bfuser\b'; then
+    echo "kill_clone_chrome must not invoke fuser" >&2
+    awk '/^kill_clone_chrome\(/,/^}/' "${ROOT}/lib/common.sh" | grep -vE '^\s*#' | grep -E '\bfuser\b' || true
+    exit 1
+  fi
+fi
 
 echo "== unknown command fails =="
 if "${BH}" not-a-command 2>/dev/null; then

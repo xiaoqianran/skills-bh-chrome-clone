@@ -36,7 +36,15 @@ MAIN ──read──► JSON ──write──► CLONE
 - ❌ `kill` / `pkill` / `killall` / `SIGTERM` / `SIGKILL` **任何**主 Chrome / Chromium 进程  
 - ❌ 结束「看起来像 chrome 的全部进程」再重拉（即使用 `--restore-last-session`）  
 - ❌ 为「启用 remote debugging」而重启主浏览器  
-- ❌ 用 `fuser -k`、杀端口等方式波及主浏览器正在使用的端口/进程  
+- ❌ 用 `fuser -k <port>/tcp`、按端口杀进程（端口撞车会误杀 MAIN，例如 9222）  
+- ✅ `kill_clone_chrome` **仅**按 `user-data-dir=<BH_CLONE_PROFILE>` 匹配 PID，且拒绝 MAIN 路径  
+
+CLI 实现保证（0.2.5+）：
+
+- **无** `pkill chrome` / `killall chrome`  
+- **无** 删除 MAIN 的 Singleton* / 改写 MAIN Local State  
+- **无** 按端口 `fuser -k`（已移除）  
+- `bh-clone use main` 需 `BH_ALLOW_USE_MAIN=1`（默认拒绝；且只改 env，不杀进程）
 
 ### 1.2 Profile 与磁盘
 

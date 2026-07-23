@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.5
+
+### Safety hardening (MAIN never collateral)
+
+- `kill_clone_chrome`: **remove `fuser -k` by port** (could kill MAIN if ports collide)
+- Kill only PIDs whose cmdline contains clone `user-data-dir=` (double-checked)
+- `bh-clone use main` requires `BH_ALLOW_USE_MAIN=1` (default refuse; still never kills)
+- `ensure` refuses MAIN as clone profile; always passes `--user-data-dir=CLONE`
+- HARD_RULES updated to document no port-based kill
+
 ## 0.2.4
 
 ### Docs / new-env harness
