@@ -7,9 +7,9 @@ REPO="$(cd "${ROOT}/.." && pwd)"
 
 echo "== version =="
 ver="$("${BH}" version)"
-echo "${ver}" | grep -qE 'bh-chrome-clone 0\.2\.6'
+echo "${ver}" | grep -qE 'bh-chrome-clone 0\.2\.7'
 # version single source
-grep -q 'BH_CLONE_VERSION:=0.2.6' "${ROOT}/lib/common.sh"
+grep -q 'BH_CLONE_VERSION:=0.2.7' "${ROOT}/lib/common.sh"
 
 echo "== help cookie-only / hard rules =="
 help_out="$("${BH}" help)"
@@ -32,8 +32,8 @@ echo "== mcp json =="
 
 echo "== sync help cookie-only =="
 sync_help="$("${BH}" sync --help)"
-echo "${sync_help}" | grep -q 'Cookie-only'
-echo "${sync_help}" | grep -q 'never kill'
+echo "${sync_help}" | grep -qi 'cookie-only'
+echo "${sync_help}" | grep -qE 'inject-only|instance|pool'
 
 echo "== docs present =="
 test -f "${REPO}/docs/HARD_RULES.md"
@@ -59,6 +59,12 @@ fi
 
 echo "== cookie_io importable =="
 PYTHONPATH="${ROOT}/lib" python3 -c 'from cookie_io import write_cookie_dump, export_summary; print("io_ok")'
+
+echo "== pool help / multi-instance flags =="
+"${BH}" pool 2>&1 | grep -q 'pool start'
+"${BH}" help | grep -q 'pool start'
+grep -q 'apply_instance_config' "${ROOT}/lib/common.sh"
+grep -q 'BU_NAME' "${ROOT}/lib/common.sh"
 
 echo "== unknown command fails =="
 if "${BH}" not-a-command 2>/dev/null; then

@@ -157,6 +157,36 @@ bh-clone up --sync
 bh-clone doctor          # CDP + harness 登录 + MCP 配置检查
 ```
 
+### 6. 多开（harness 并行，不抢同一个浏览器）
+
+只绑一个 `:9333` 时，所有 harness 都打同一台 clone，**看起来像「多开没了」**。  
+本地真并行需要多份 clone（或官方 cloud 浏览器）：
+
+```bash
+bh-clone pool start 2      # w1=:9333  w2=:9334，各自 profile + BU_NAME
+bh-clone pool sync         # Cookie 导出一次，注入所有 worker
+bh-clone pool list
+bh-clone pool env          # 打印并行示例
+```
+
+```bash
+# 终端 A
+source ~/.config/browser-harness/env.w1
+browser-harness <<'PY'
+new_tab("https://www.zhihu.com/")
+print(page_info())
+PY
+
+# 终端 B（同时）
+source ~/.config/browser-harness/env.w2
+browser-harness <<'PY'
+new_tab("https://duckduckgo.com/")
+print(page_info())
+PY
+```
+
+详见 [docs/MULTI_INSTANCE.md](docs/MULTI_INSTANCE.md)。
+
 ### Google 账号：默认不同步
 
 `bh-clone sync` **默认排除 Google 系 Cookie**（`google.com` / `youtube.com` / `gmail.com` / `googleapis.com` 等），  
@@ -178,14 +208,15 @@ Google 相关操作请用主 Chrome 手动完成，或临时 `bh-clone use main`
 
 ```text
 bh-clone init [--with-profile]    # 默认 cookie-only
-bh-clone sync [--with-profile] [--include-google]
-bh-clone ensure                   # 只启 clone
-bh-clone up [--sync]              # 双客户端就绪
-bh-clone use clone|main           # 只改 env，不杀进程
+bh-clone sync [--instance N] [--port P] [--inject-only] ...
+bh-clone ensure [--instance N] [--port P]
+bh-clone up [--sync] [--instance N]
+bh-clone pool start N|list|stop|env|sync   # 本地多开
+bh-clone use clone|main
 
 bh-clone mcp print|json|install-grok|check
 bh-clone doctor
-bh-clone version                  # 0.2.6
+bh-clone version                  # 0.2.7
 ```
 
 ### 跑测试

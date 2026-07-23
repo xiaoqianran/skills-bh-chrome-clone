@@ -17,15 +17,21 @@ fi
 BH_REPO_ROOT="$(cd "${BH_CLONE_ROOT}/.." && pwd)"
 
 # Single source of truth for CLI version (bh-clone sources this)
-: "${BH_CLONE_VERSION:=0.2.6}"
+: "${BH_CLONE_VERSION:=0.2.7}"
 
 : "${BH_MAIN_PROFILE:=${HOME}/.config/google-chrome}"
+: "${BH_STATE_DIR:=${HOME}/.config/browser-harness}"
+: "${BH_COOKIE_FILE:=${HOME}/.config/browser-harness/main-cookies.json}"
+: "${BH_PORT_BASE:=9333}"
+# Multi-instance: each clone = own profile + port + harness BU_NAME (separate daemon)
+: "${BH_INSTANCE:=default}"
+: "${BH_INSTANCE_REGISTRY:=${BH_STATE_DIR}/instances.tsv}"
+# Set by apply_instance_config (defaults for backward compat):
 : "${BH_CLONE_PROFILE:=${HOME}/.config/browser-harness-chrome-clone}"
 : "${BH_CDP_PORT:=9333}"
-: "${BH_COOKIE_FILE:=${HOME}/.config/browser-harness/main-cookies.json}"
-: "${BH_STATE_DIR:=${HOME}/.config/browser-harness}"
 : "${BH_CLONE_LOG:=/tmp/browser-harness-chrome-clone.log}"
 : "${BH_ENV_FILE:=${HOME}/.config/browser-harness/env}"
+: "${BH_BU_NAME:=clone}"
 : "${BH_CDP_URL:=http://127.0.0.1:${BH_CDP_PORT}}"
 : "${PATH:=${PATH}}"
 : "${BH_EXCLUDE_DOMAINS:=}"
@@ -115,9 +121,139 @@ assert_not_main_profile() {
 }
 
 # Clone kill/start paths must look like the harness twin (or explicit override).
+# Accepts default and multi-instance: .../browser-harness-chrome-clone[-name]
 is_default_clone_profile() {
   local profile="${1:-${BH_CLONE_PROFILE}}"
   [[ "${profile}" == *browser-harness-chrome-clone* ]]
+}
+
+# --- multi-instance (restore harness multi-open) ------------------------------
+# One local Chrome cannot safely parallelize. browser-harness multi-open needs
+# either cloud browsers (BU_NAME + start_remote_daemon) OR multiple local clones
+# (this section): distinct --user-data-dir + CDP port + BU_NAME per worker.
+
+validate_instance_name() {
+  local name="$1"
+  [[ "${name}" =~ ^[A-Za-z0-9_-]{1,32}$ ]] \
+    || die "invalid instance name '${name}' (use 1-32 chars: A-Za-z0-9_-)"
+}
+
+# Next free port starting at BH_PORT_BASE, skipping ports listed in registry.
+instance_next_port() {
+  ensure_state_dir
+  local used="" p
+  if [[ -f "${BH_INSTANCE_REGISTRY}" ]]; then
+    used="$(awk -F'\t' 'NR>1 {print $2}' "${BH_INSTANCE_REGISTRY}" 2>/dev/null || true)"
+  fi
+  p="${BH_PORT_BASE}"
+  while true; do
+    if ! printf '%s\n' "${used}" | grep -qx "${p}"; then
+      if ! cdp_ready "${p}"; then
+        printf '%s\n' "${p}"
+        return 0
+      fi
+    fi
+    p=$((p + 1))
+    if [[ "${p}" -gt $((BH_PORT_BASE + 200)) ]]; then
+      die "no free CDP port near ${BH_PORT_BASE}"
+    fi
+  done
+}
+
+# Lookup port for instance name from registry; empty if unknown.
+instance_registry_port() {
+  local name="$1"
+  [[ -f "${BH_INSTANCE_REGISTRY}" ]] || return 0
+  awk -F'\t' -v n="${name}" 'NR>1 && $1==n {print $2; exit}' "${BH_INSTANCE_REGISTRY}"
+}
+
+register_instance() {
+  ensure_state_dir
+  local name="${BH_INSTANCE}" port="${BH_CDP_PORT}" prof="${BH_CLONE_PROFILE}" bun="${BH_BU_NAME}"
+  if [[ ! -f "${BH_INSTANCE_REGISTRY}" ]]; then
+    printf 'name\tport\tprofile\tbu_name\n' > "${BH_INSTANCE_REGISTRY}"
+  fi
+  # rewrite without this name, then append
+  local tmp
+  tmp="$(mktemp)"
+  awk -F'\t' -v n="${name}" 'NR==1 || $1!=n' "${BH_INSTANCE_REGISTRY}" >"${tmp}"
+  printf '%s\t%s\t%s\t%s\n' "${name}" "${port}" "${prof}" "${bun}" >>"${tmp}"
+  mv "${tmp}" "${BH_INSTANCE_REGISTRY}"
+}
+
+# Apply BH_INSTANCE / BH_CDP_PORT_EXPLICIT → profile, port, env file, BU_NAME.
+# Call after parsing --instance / --port. Safe for default (backward compatible).
+apply_instance_config() {
+  local name="${BH_INSTANCE:-default}"
+  validate_instance_name "${name}"
+  BH_INSTANCE="${name}"
+
+  if [[ "${name}" == "default" ]]; then
+    BH_CLONE_PROFILE="${HOME}/.config/browser-harness-chrome-clone"
+    if [[ -n "${BH_CDP_PORT_EXPLICIT:-}" ]]; then
+      BH_CDP_PORT="${BH_CDP_PORT_EXPLICIT}"
+    else
+      BH_CDP_PORT="${BH_CDP_PORT:-${BH_PORT_BASE}}"
+      # if still empty somehow
+      : "${BH_CDP_PORT:=9333}"
+    fi
+    BH_BU_NAME="${BH_BU_NAME:-clone}"
+    BH_ENV_FILE="${BH_STATE_DIR}/env"
+    BH_CLONE_LOG="/tmp/browser-harness-chrome-clone.log"
+  else
+    BH_CLONE_PROFILE="${HOME}/.config/browser-harness-chrome-clone-${name}"
+    BH_BU_NAME="clone-${name}"
+    BH_ENV_FILE="${BH_STATE_DIR}/env.${name}"
+    BH_CLONE_LOG="/tmp/browser-harness-chrome-clone-${name}.log"
+    if [[ -n "${BH_CDP_PORT_EXPLICIT:-}" ]]; then
+      BH_CDP_PORT="${BH_CDP_PORT_EXPLICIT}"
+    else
+      local reg
+      reg="$(instance_registry_port "${name}" || true)"
+      if [[ -n "${reg}" ]]; then
+        BH_CDP_PORT="${reg}"
+      else
+        BH_CDP_PORT="$(instance_next_port)"
+      fi
+    fi
+  fi
+
+  BH_CDP_URL="http://127.0.0.1:${BH_CDP_PORT}"
+  assert_main_clone_distinct
+  register_instance
+}
+
+# Parse --instance NAME and --port N from "$@"; leaves remaining in INSTANCE_PARSE_REMAINING array.
+# Usage: parse_instance_flags "$@"; set -- "${INSTANCE_PARSE_REMAINING[@]}"
+parse_instance_flags() {
+  INSTANCE_PARSE_REMAINING=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --instance|-i)
+        [[ $# -ge 2 ]] || die "--instance needs a name"
+        BH_INSTANCE="$2"
+        shift 2
+        ;;
+      --port)
+        [[ $# -ge 2 ]] || die "--port needs a number"
+        BH_CDP_PORT_EXPLICIT="$2"
+        shift 2
+        ;;
+      *)
+        INSTANCE_PARSE_REMAINING+=("$1")
+        shift
+        ;;
+    esac
+  done
+}
+
+list_registered_instances() {
+  ensure_state_dir
+  if [[ ! -f "${BH_INSTANCE_REGISTRY}" ]]; then
+    printf 'default\t%s\t%s\tclone\n' "${BH_PORT_BASE}" "${HOME}/.config/browser-harness-chrome-clone"
+    return 0
+  fi
+  awk -F'\t' 'NR>1 {print}' "${BH_INSTANCE_REGISTRY}"
 }
 
 die_main_cookie_export_failed() {
@@ -190,14 +326,23 @@ chrome_bin() {
 
 write_env_clone() {
   ensure_state_dir
+  # Per-instance env so multi-open can: source env.w1 vs env.w2
   cat > "${BH_ENV_FILE}" <<EOF
-# Generated by bh-chrome-clone — automation clone mode (cookie-only target)
+# Generated by bh-chrome-clone — clone instance '${BH_INSTANCE:-default}'
+# Multi-open: each instance needs its own BU_NAME + BU_CDP_URL (separate daemon).
 export PATH="\${HOME}/.local/bin:\${PATH}"
 export BU_CDP_URL=http://127.0.0.1:${BH_CDP_PORT}
+export BU_NAME=${BH_BU_NAME}
 export BH_CDP_PORT=${BH_CDP_PORT}
+export BH_INSTANCE=${BH_INSTANCE:-default}
 export BH_CLONE_PROFILE="${BH_CLONE_PROFILE}"
 export BH_COOKIE_FILE="${BH_COOKIE_FILE}"
+export BH_BU_NAME=${BH_BU_NAME}
 EOF
+  # Keep default env as the primary worker when writing default instance
+  if [[ "${BH_INSTANCE:-default}" == "default" && "${BH_ENV_FILE}" != "${BH_STATE_DIR}/env" ]]; then
+    cp -f "${BH_ENV_FILE}" "${BH_STATE_DIR}/env" 2>/dev/null || true
+  fi
 }
 
 write_env_main() {

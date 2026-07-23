@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.7
+
+### Multi-instance / harness multi-open
+
+- Problem: pinning `BU_CDP_URL=:9333` made all harness jobs share one Chrome
+- Fix: **pool** of local clones — each worker has own profile, CDP port, `BU_NAME`
+- Commands: `bh-clone pool start N|list|stop|env|sync`
+- Flags: `--instance NAME --port N` on ensure/up/sync; `--inject-only` for pool sync
+- Env files: `~/.config/browser-harness/env` and `env.w1`, `env.w2`, …
+- Docs: [docs/MULTI_INSTANCE.md](docs/MULTI_INSTANCE.md)
+
 ## 0.2.6
 
 ### Code quality + tests

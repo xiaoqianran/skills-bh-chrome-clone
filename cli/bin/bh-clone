@@ -22,48 +22,46 @@ bh-clone ${VERSION} — cookie-only session twin (browser-harness + chrome-devto
 
 Model:
   MAIN  = your daily Chrome (READ cookies only — never killed/rewritten)
-  CLONE = automation Chrome on :${BH_CDP_PORT} (WRITE target)
-  Flow  = MAIN --getAllCookies--> JSON --setCookies--> CLONE
+  CLONE = automation Chrome(s) (WRITE targets)
+  Flow  = MAIN --getAllCookies--> JSON --setCookies--> CLONE(s)
+
+One clone is NOT multi-open. Parallel harness jobs need multiple clones
+(or Browser Use cloud). See: bh-clone pool
 
 Usage:
   bh-clone <command> [args]
 
 Setup & session
-  init [--with-profile]     First-time cookie-only setup (optional full rsync)
-  sync [--with-profile]     READ main cookies → WRITE clone (default: cookie-only)
-  ensure                    Start CLONE only if not running
-  up [--sync]               ensure + harness env (+ optional sync)
-  use clone|main            Switch browser-harness env file only (no process kill)
+  init [--with-profile]              First-time cookie-only setup
+  sync [opts]                        READ main cookies → WRITE one clone
+  ensure [--instance N] [--port P]   Start one CLONE
+  up [--sync] [--instance N]         ensure + write env (BU_CDP_URL + BU_NAME)
+  use clone|main                     Env only (main needs BH_ALLOW_USE_MAIN=1)
+
+Multi-open (local)
+  pool start <N>                     Start N workers w1..wN (ports 9333+)
+  pool list | stop [name] | env | sync
 
 Clients
-  mcp print|json            Print chrome-devtools MCP config (clone browserUrl)
-  mcp install-grok          Write ~/.grok/config.toml for clone (no auto-connect)
-  mcp check                 Verify clone CDP is up for MCP
+  mcp print|json|install-grok|check  chrome-devtools → one clone URL
 
 Diagnostics
-  doctor | status           Health for paths, CDP, optional probes, MCP config
-  version                   Print version
-  help                      This help
+  doctor | status | version | help
 
-HARD RULES (MAIN browser):
-  We never kill/restart main Chrome or rewrite its profile to "fix" sync.
-  If export fails: Allow remote debugging in MAIN yourself, then re-run sync.
-  Docs: docs/HARD_RULES.md  docs/COOKIE_ONLY.md
+HARD RULES: never kill/restart MAIN Chrome. Docs: docs/HARD_RULES.md
 
-Environment (optional):
-  BH_MAIN_PROFILE   default: ~/.config/google-chrome
-  BH_CLONE_PROFILE  default: ~/.config/browser-harness-chrome-clone
-  BH_CDP_PORT       default: 9333
-  BH_COOKIE_FILE    default: ~/.config/browser-harness/main-cookies.json
-
-Quick start:
-  bh-clone init                 # cookie-only; may ask you to Allow on MAIN
-  bh-clone up
-  bh-clone mcp install-grok     # then restart Grok/MCP host
-  export BU_CDP_URL=http://127.0.0.1:${BH_CDP_PORT}
+Quick start (single):
+  bh-clone init && bh-clone up
+  source ~/.config/browser-harness/env
   browser-harness <<'PY'
   print(page_info())
   PY
+
+Quick multi-open (two workers):
+  bh-clone pool start 2
+  bh-clone pool sync
+  # shell A: source ~/.config/browser-harness/env.w1 && browser-harness ...
+  # shell B: source ~/.config/browser-harness/env.w2 && browser-harness ...
 USAGE
 }
 
@@ -96,6 +94,9 @@ case "${cmd}" in
     ;;
   doctor|status)
     bash "${ROOT}/scripts/doctor.sh" "$@"
+    ;;
+  pool)
+    bash "${ROOT}/scripts/pool.sh" "$@"
     ;;
   version|--version|-V)
     echo "bh-chrome-clone ${VERSION}"
