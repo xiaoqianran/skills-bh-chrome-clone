@@ -92,13 +92,32 @@ opencli bilibili summary BVxxxx -f json
 
 Use browser-harness on the **clone** for UI flows adapters do not cover.
 
+## chrome-devtools MCP on the same clone
+
+Do **not** configure chrome-devtools with `--auto-connect` to the main browser.
+
+Use the clone CDP instead (same cookies as browser-harness):
+
+```toml
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = [
+    "-y",
+    "chrome-devtools-mcp@latest",
+    "--browserUrl",
+    "http://127.0.0.1:9333",
+]
+```
+
+Always `bh-clone ensure` before the MCP starts. Full notes: `references/chrome-devtools-mcp.md`.
+
 ## Critical rules
 
 1. **Never print or commit cookie dumps.** File default: `~/.config/browser-harness/main-cookies.json` (mode `600`).
 2. **Do not** share the clone profile directory; it holds session power.
 3. Prefer **clone** for automation; **main** only for live tabs / one-off human-paced work.
 4. Cookie-only sync: sites that store auth only in localStorage may need `bh-clone sync --with-profile` or a manual login inside the clone.
-5. This is a **Skill + CLI**, not an MCP. Browser control stays in browser-harness / chrome-devtools / opencli.
+5. This is a **Skill + CLI**, not an MCP. Browser control stays in browser-harness / chrome-devtools / opencli — but chrome-devtools should attach to the **clone**, not auto-connect main.
 
 ## Commands cheat sheet
 

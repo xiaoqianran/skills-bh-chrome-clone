@@ -127,6 +127,28 @@ mkdir -p ~/.grok/skills
 ln -sfn "$PWD/skills/bh-chrome-clone" ~/.grok/skills/bh-chrome-clone
 ```
 
+## chrome-devtools MCP (same clone, no auto-connect)
+
+Do **not** use `--auto-connect` on your daily Chrome. Point MCP at the twin:
+
+```toml
+# ~/.grok/config.toml
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = [
+    "-y",
+    "chrome-devtools-mcp@latest",
+    "--browserUrl",
+    "http://127.0.0.1:9333",
+]
+enabled = true
+startup_timeout_sec = 90
+```
+
+Order: `bh-clone ensure` → (optional `bh-clone sync`) → restart MCP/session → use chrome-devtools tools.
+
+Details: [references/chrome-devtools-mcp.md](references/chrome-devtools-mcp.md)
+
 ## License
 
 MIT
