@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+### Security
+
+- Cookie sync **excludes Google-family domains by default** (google / youtube / gmail / …)
+- After inject, purge Google-family cookies already present on the clone
+- `BH_EXCLUDE_DOMAINS` for extra suffixes; `--include-google` opt-in only (discouraged)
+
 ## 0.2.0
 
 ### Features

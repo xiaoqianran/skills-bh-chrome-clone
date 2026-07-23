@@ -86,6 +86,9 @@ opencli bilibili summary BVxxxx -f json
 3. Do not spam main CDP if Allow popup appears — ask user to click Allow once.
 4. Start clone **before** chrome-devtools MCP connects (`bh-clone ensure` / `up`).
 5. Skill + CLI only — not a new MCP server. Existing MCP is chrome-devtools attached to the twin.
+6. **Never sync Google-family cookies by default** (`google` / `youtube` / `gmail` / …).  
+   Do **not** pass `--include-google` unless the user explicitly accepts account risk.  
+   For Google UI work, use main browser manually or `bh-clone use main`, not the twin.
 
 ## Command map
 

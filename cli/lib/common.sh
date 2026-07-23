@@ -21,6 +21,10 @@ fi
 : "${BH_ENV_FILE:=${HOME}/.config/browser-harness/env}"
 : "${BH_CDP_URL:=http://127.0.0.1:${BH_CDP_PORT}}"
 : "${PATH:=${PATH}}"
+# Comma-separated domain suffixes never synced (Google account safety by default).
+# Override with BH_EXCLUDE_DOMAINS; set BH_INCLUDE_GOOGLE=1 to disable Google blocklist.
+: "${BH_EXCLUDE_DOMAINS:=}"
+: "${BH_INCLUDE_GOOGLE:=0}"
 
 # Prefer user-local tools
 export PATH="${HOME}/.local/bin:${PATH}"

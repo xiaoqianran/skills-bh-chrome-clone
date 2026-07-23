@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BH="${ROOT}/bin/bh-clone"
 
 echo "== version =="
-"${BH}" version | grep -q 'bh-chrome-clone 0.2'
+"${BH}" version | grep -qE 'bh-chrome-clone 0\.2'
 
 echo "== help =="
 "${BH}" help | grep -q 'chrome-devtools'

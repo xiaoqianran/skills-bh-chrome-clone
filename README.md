@@ -129,13 +129,28 @@ bh-clone up --sync
 bh-clone doctor          # CDP + harness 登录 + MCP 配置检查
 ```
 
+### Google 账号：默认不同步
+
+`bh-clone sync` **默认排除 Google 系 Cookie**（`google.com` / `youtube.com` / `gmail.com` / `googleapis.com` 等），  
+并在注入后尝试 **清除 clone 上已有的 Google 系 Cookie**，降低主号进自动化环境的风险。
+
+```bash
+# 额外排除其它域名
+BH_EXCLUDE_DOMAINS=example.com,foo.com bh-clone sync
+
+# 不推荐：强制包含 Google（需自担账号风险）
+# bh-clone sync --include-google
+```
+
+Google 相关操作请用主 Chrome 手动完成，或临时 `bh-clone use main`，不要把主 Google 会话拷进 twin。
+
 ---
 
 ## CLI 一览
 
 ```text
 bh-clone init
-bh-clone sync [--with-profile]
+bh-clone sync [--with-profile] [--include-google]
 bh-clone ensure
 bh-clone up [--sync]              # 双客户端就绪
 bh-clone use clone|main
