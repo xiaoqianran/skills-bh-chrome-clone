@@ -1,273 +1,201 @@
 # skills-bh-chrome-clone
 
-**Agent Skill + CLI** — 把主 Chrome 的登录态同步到**独立自动化浏览器**（CDP `:9333`），同时给：
-
-1. **[browser-harness](https://github.com/browser-use/browser-harness)**（**上游官方**，本仓库不内嵌；安装见 [install.md](https://github.com/browser-use/browser-harness/blob/main/install.md)）  
-2. **[chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp)**  
-
-用，**不要**对日常主浏览器 `--auto-connect`。
-
-| 上游 | 地址 |
-|------|------|
-| browser-harness 仓库 | https://github.com/browser-use/browser-harness |
-| browser-harness 安装 | https://github.com/browser-use/browser-harness/blob/main/install.md |
-| 本仓库如何对接 harness | [docs/BROWSER_HARNESS.md](docs/BROWSER_HARNESS.md) |
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+用**第二个 Chrome**（自动化专用）干活，**不要动你日常上网的那个 Chrome**。
 
 ---
 
-## 一张图
+## 30 秒看懂
+
+你日常用的 Chrome（里面登了知乎、各种账号）叫 **主浏览器**。
+
+如果让机器人**直接操作主浏览器**，会：
+
+- 经常弹「允许远程调试」
+- 和你手边标签打架
+- 搞不好还把登录搞丢（我们踩过坑）
+
+所以本项目做了这件事：
 
 ```text
-                    ┌─────────────────────────┐
-                    │  Main Chrome (日常)      │
-                    │  登录 / 真标签           │
-                    └───────────┬─────────────┘
-                                │ CDP 导出 Cookie（可弹一次 Allow）
-                                ▼
-                    ┌─────────────────────────┐
-                    │  Clone Chrome :9333      │
-                    │  profile + 注入 Cookie   │
-                    └───────────┬─────────────┘
-                     ┌──────────┴──────────┐
-                     ▼                     ▼
-            browser-harness         chrome-devtools MCP
-            BU_CDP_URL=...:9333     --browserUrl ...:9333
+主浏览器（你用）  ──复制 Cookie──►  第二个浏览器 clone（机器人用）
+                                         │
+                         ┌───────────────┴───────────────┐
+                         ▼                               ▼
+                  browser-harness                  chrome-devtools
+                  （写脚本控制）                   （在 Grok 里点网页）
 ```
 
----
-
-## 为什么
-
-| 方式 | 登录态 | Allow 弹窗 | 适合 |
-|------|--------|------------|------|
-| 附着主 Chrome / `--auto-connect` | 有 | 常有 | 临时调试 |
-| 空 profile | 无 | 无 | 匿名 |
-| **本项目 Clone** | Cookie 同步后有 | **Clone 上无** | 无人值守 + 双客户端 |
-
-> 只 `rsync` profile **不够**：磁盘 Cookie 加密，clone 常丢掉 `SESSDATA`。必须 **CDP 明文导出再注入**。
+- **主浏览器**：只负责你自己登录；偶尔允许一次「远程调试」以便复制 Cookie  
+- **clone 浏览器**：开在 `http://127.0.0.1:9333`，给自动化用  
+- **browser-harness** 和 **chrome-devtools** 连的是**同一个** clone，不是两个浏览器  
 
 ---
 
-## 完整安装（从头到尾）
+## 和你有关的三个名字
 
-> **新环境注意：** 只 clone 本仓库不够。必须同时按上游装好  
-> **[browser-use/browser-harness](https://github.com/browser-use/browser-harness)**  
-> （[install.md](https://github.com/browser-use/browser-harness/blob/main/install.md)）。  
-> 详见 [docs/BROWSER_HARNESS.md](docs/BROWSER_HARNESS.md)。
+| 名字 | 是什么 | 你要不要装 |
+|------|--------|------------|
+| **本仓库 `bh-clone`** | 复制 Cookie、启动 clone、写配置的小工具 | ✅ 要 |
+| **browser-harness** | 官方「用 Python 控制浏览器」的工具 | ✅ 要（另一个 GitHub） |
+| **chrome-devtools MCP** | 让 Grok 等 AI 直接点网页的插件 | 可选 |
 
-### 0. 依赖
+browser-harness **不在本仓库里**，官方地址：
 
-- Google Chrome / Chromium  
-- [uv](https://github.com/astral-sh/uv) + Python 3.12  
-- `curl` `rsync` `bash` `python3`  
-- （可选）Grok / 其他 MCP 宿主  
-- **上游：** [browser-harness](https://github.com/browser-use/browser-harness)
+- 仓库：https://github.com/browser-use/browser-harness  
+- 安装说明：https://github.com/browser-use/browser-harness/blob/main/install.md  
 
-### 1. 安装本仓库（会尝试配置上游 harness）
+更细的对接说明：[docs/BROWSER_HARNESS.md](docs/BROWSER_HARNESS.md)
+
+---
+
+## 新电脑怎么装（按顺序做）
+
+### 你需要先有
+
+- Google Chrome  
+- [uv](https://github.com/astral-sh/uv)（用来装 Python 工具）  
+- 基本命令：`bash`、`curl`、`python3`  
+
+### 一步安装（推荐）
 
 ```bash
 git clone https://github.com/xiaoqianran/skills-bh-chrome-clone.git
 cd skills-bh-chrome-clone
 ./install.sh
-# → ~/.local/bin/bh-clone
-# → ~/.grok/skills/bh-chrome-clone（及 codex/claude 若存在）
-# → 默认再跑 ./scripts/setup-browser-harness.sh（官方 harness + skill）
-#    跳过 harness：BH_SKIP_HARNESS=1 ./install.sh
 ```
 
-确保 `~/.local/bin` 在 `PATH` 中。
+这一步会：
 
-仅补装 / 重装上游 harness：
+1. 安装命令 `bh-clone`  
+2. 装上本仓库的 AI skill  
+3. **尽量**顺带装好官方 browser-harness（需要机器上有 `uv`）  
+
+如果只想装本仓库、暂时不装 harness：
 
 ```bash
+BH_SKIP_HARNESS=1 ./install.sh
+# 以后再装 harness：
 ./scripts/setup-browser-harness.sh
-# 等价于官方:
-#   uv tool install --python 3.12 --upgrade --force browser-harness
-#   browser-harness skill > ~/.codex/skills/browser-harness/SKILL.md  # 等
-# 文档: https://github.com/browser-use/browser-harness/blob/main/install.md
 ```
 
-### 2. 首次建立 session twin（cookie-only）
+保证 `~/.local/bin` 在 PATH 里（装完能直接敲 `bh-clone`）。
+
+### 第一次：把登录态拷到 clone
+
+1. 打开你的**主 Chrome**，确认想同步的网站已经登录（比如知乎）。  
+2. 在主 Chrome 地址栏打开：
+
+   `chrome://inspect/#remote-debugging`
+
+3. 勾选 **Allow remote debugging for this browser instance**，弹窗点 **Allow**。  
+4. 终端执行：
 
 ```bash
 bh-clone init
-# 默认只复制 cookie，不杀/不改主浏览器
-# 若导出失败：在主 Chrome 打开 chrome://inspect/#remote-debugging 点 Allow，再 bh-clone sync
-# 可选全量 profile：bh-clone init --with-profile
-bh-clone doctor
+# 以后登录过期只跑：
+# bh-clone sync
 ```
 
-### 3. 配置 browser-harness → 指向 clone
+成功含义：Cookie 从主浏览器**读出来**，写进 clone。  
+**不会**关掉你的主浏览器，也**不会**改主浏览器里的文件。
 
-上游 skill / daemon 的用法以官方为准：  
-https://github.com/browser-use/browser-harness  
+如果失败：多半是第 2–3 步没勾好，再勾一次后执行 `bh-clone sync`。
 
-本仓库侧只负责把 **CDP 指到 clone**（官方支持 `BU_CDP_URL`）：
+### 日常怎么用
 
 ```bash
+# 1) 保证 clone 在跑
 bh-clone up
-export BU_CDP_URL=http://127.0.0.1:9333
-# 或: source ~/.config/browser-harness/env
 
+# 2) 告诉 harness 连 clone（不是主浏览器）
+source ~/.config/browser-harness/env
+# 里面是：export BU_CDP_URL=http://127.0.0.1:9333
+
+# 3) 试一下
 browser-harness <<'PY'
 ensure_real_tab()
 print(page_info())
 PY
-browser-harness --doctor
 ```
 
-### 4. 配置 chrome-devtools MCP（关键）
-
-**不要**再写 `--auto-connect` 连主浏览器。
+### 想在 Grok 里用 chrome-devtools（可选）
 
 ```bash
-bh-clone mcp print              # 查看 TOML
-bh-clone mcp install-grok       # 写入 ~/.grok/config.toml
-# 然后【重启 Grok / MCP 宿主】使配置生效
+bh-clone mcp install-grok
+# 然后重启 Grok，让配置生效
 ```
 
-等价手写：
-
-```toml
-[mcp_servers.chrome-devtools]
-command = "npx"
-args = [
-    "-y",
-    "chrome-devtools-mcp@latest",
-    "--browserUrl",
-    "http://127.0.0.1:9333",
-]
-enabled = true
-startup_timeout_sec = 90
-```
-
-JSON 客户端：`bh-clone mcp json` 或 `cli/config/chrome-devtools.mcp.example.json`。
-
-### 5. 日常
-
-```bash
-bh-clone up              # 确保 clone 在跑 + 写 harness env
-# 登录过期：
-bh-clone sync
-# 或
-bh-clone up --sync
-
-bh-clone doctor          # CDP + harness 登录 + MCP 配置检查
-```
-
-### Google 账号：默认不同步
-
-`bh-clone sync` **默认排除 Google 系 Cookie**（`google.com` / `youtube.com` / `gmail.com` / `googleapis.com` 等），  
-并在注入后尝试 **清除 clone 上已有的 Google 系 Cookie**，降低主号进自动化环境的风险。
-
-```bash
-# 额外排除其它域名
-BH_EXCLUDE_DOMAINS=example.com,foo.com bh-clone sync
-
-# 不推荐：强制包含 Google（需自担账号风险）
-# bh-clone sync --include-google
-```
-
-Google 相关操作请用主 Chrome 手动完成，或临时 `bh-clone use main`，不要把主 Google 会话拷进 twin。
+配置要点：连 `http://127.0.0.1:9333`，**不要**写 `--auto-connect`（那是去连主浏览器）。
 
 ---
 
-## CLI 一览
+## 你最常用的命令
 
-```text
-bh-clone init [--with-profile]    # 默认 cookie-only
-bh-clone sync [--with-profile] [--include-google]
-bh-clone ensure                   # 只启 clone
-bh-clone up [--sync]              # 双客户端就绪
-bh-clone use clone|main           # 只改 env，不杀进程
+| 命令 | 干什么 |
+|------|--------|
+| `bh-clone up` | 启动 clone，写好环境变量 |
+| `bh-clone sync` | 从主浏览器**重新复制** Cookie（登录过期时） |
+| `bh-clone doctor` | 检查是否正常 |
+| `bh-clone ensure` | 只确保 clone 在跑 |
+| `bh-clone mcp install-grok` | 给 Grok 配 chrome-devtools |
 
-bh-clone mcp print|json|install-grok|check
-bh-clone doctor
-bh-clone version                  # 0.2.6
+```bash
+bh-clone init          # 第一次
+bh-clone sync          # 以后同步 Cookie
+bh-clone up            # 日常启动
+bh-clone doctor        # 体检
 ```
 
-### 跑测试
+---
+
+## 安全（很重要，三句话）
+
+1. **机器人只准动 clone**，不准杀、不准重启、不准改你的**主 Chrome**。  
+2. 复制 Cookie 时，主浏览器最多让你点一次 **Allow**；点不了就停，**不会**「强行重启主浏览器」。  
+3. **默认不复制 Google / YouTube / Gmail 等账号 Cookie**，降低主号进自动化环境的风险。
+
+完整禁止清单：[docs/HARD_RULES.md](docs/HARD_RULES.md)
+
+---
+
+## 常见问题
+
+**Q：browser-harness 和 chrome-devtools 是不是两个浏览器？**  
+A：不是。都连 **同一个 clone（端口 9333）**。
+
+**Q：为什么不直接控制我正在用的 Chrome？**  
+A：会弹窗、抢标签，还有丢登录的风险。clone 是专用的「机器人浏览器」。
+
+**Q：只装了这个仓库，没装 browser-harness 行吗？**  
+A：可以启动 clone、配 MCP，但**脚本控制浏览器**要用官方 harness，请看上面的 GitHub 链接。
+
+**Q：`doctor` 说 bilibili 没登录，是不是装失败了？**  
+A：不是。那只是可选探测；你没要求同步 B 站就不影响。
+
+**Q：Google 搜索在 clone 里要验证码？**  
+A：常见（机房 IP）。可换 DuckDuckGo，或主浏览器里搜完把链接给 AI。
+
+---
+
+## 文档索引（按需点开）
+
+| 文档 | 内容 |
+|------|------|
+| [docs/HARD_RULES.md](docs/HARD_RULES.md) | 绝不能动主浏览器的规定 |
+| [docs/COOKIE_ONLY.md](docs/COOKIE_ONLY.md) | 默认「只复制 Cookie」是什么意思 |
+| [docs/BROWSER_HARNESS.md](docs/BROWSER_HARNESS.md) | 官方 harness 怎么装、怎么对接 |
+| [docs/RL_SEARCH_EVAL_AND_NOTES.md](docs/RL_SEARCH_EVAL_AND_NOTES.md) | 强化学习资料检索笔记 + 两工具速度对比 |
+| [AGENTS.md](AGENTS.md) | 给 AI Agent 看的简短规则 |
+
+---
+
+## 开发者：跑测试
 
 ```bash
 bash cli/tests/run-tests.sh
-# 或: python3 cli/tests/test_cookie_filter.py && bash cli/tests/test_guards.sh && bash cli/tests/smoke_cli.sh
 ```
 
----
-
-## 仓库结构
-
-```text
-skills-bh-chrome-clone/
-├── docs/HARD_RULES.md                # ⛔ 绝对禁止事项（Agent 必读）
-├── docs/COOKIE_ONLY.md               # 默认只复制 cookie 模型
-├── docs/BROWSER_HARNESS.md           # 上游 harness 官方地址与新环境配置
-├── scripts/setup-browser-harness.sh  # 按官方 install.md 装 harness + skill
-├── skills/bh-chrome-clone/SKILL.md   # Agent Skill
-├── cli/                              # bh-clone 实现
-│   ├── bin/bh-clone
-│   ├── lib/common.sh
-│   ├── scripts/                      # init sync ensure up doctor mcp-config
-│   └── config/                       # MCP / env 示例
-├── references/                       # 架构 / 验证 / MCP 说明
-├── docs/design.md
-├── AGENTS.md
-├── install.sh
-└── README.md
-```
-
----
-
-## 双客户端对照
-
-| | browser-harness | chrome-devtools MCP |
-|--|-----------------|---------------------|
-| 连接 | `BU_CDP_URL` | `--browserUrl` |
-| 配置命令 | `bh-clone up` / `use clone` | `bh-clone mcp install-grok` |
-| 目标 | 脚本化控制、CDP helpers | 列表页/点击/网络/性能工具 |
-| 共用 | 同一 clone profile + `:9333` + Cookie 同步 | 同左 |
-
----
-
-## 安全
-
-- Cookie 文件：`~/.config/browser-harness/main-cookies.json`（**600**）  
-- **勿提交** cookies / clone profile  
-- Clone = 第二份登录钥匙，仅本机使用  
-
-### ⛔ 主浏览器绝对禁止（Agent / 脚本）
-
-**权威全文：[docs/HARD_RULES.md](docs/HARD_RULES.md)**（与任何示例冲突时以它为准）
-
-| 禁止 | 说明 |
-|------|------|
-| 杀 / 重启主 Chrome | 会导致 grok.com 等**日常登录丢失**，且不可从本仓库恢复 |
-| 删主 profile `Singleton*` | 逼退日常浏览器 |
-| 改主 profile `Local State` / Cookies / Storage | 破坏用户数据 |
-| 主 profile + `--remote-debugging-port` 强行重启 | Chrome 新版本会拒，且伤会话 |
-| 在主浏览器上清 cookie | 只允许对 **clone** 注入/过滤 |
-
-主浏览器 **只**允许：用户本人使用；`bh-clone sync` 只读导出 cookie（Allow 弹窗由**用户**点）。  
-导出失败 → **停下来告诉用户**，禁止「杀主浏览器曲线救国」。
-
-自动化 **只**碰：
-
-- profile：`~/.config/browser-harness-chrome-clone`  
-- CDP：`http://127.0.0.1:9333`  
-
-`bh-clone doctor` 里 bilibili 未登录 **不等于** 安装失败。
-
----
-
-## 验证（曾实测）
-
-见 [references/verification.md](references/verification.md)（**可选**场景，非安装必过门槛）：
-
-- clone CDP ready  
-- bilibili `isLogin: true`（仅当你在测 B 站登录时）  
-- 搜索「清华学生如何学习」有真实结果  
+当前 CLI 版本：见 `bh-clone version`（源码里 `BH_CLONE_VERSION`）。
 
 ---
 
