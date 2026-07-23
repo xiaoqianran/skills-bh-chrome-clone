@@ -11,14 +11,14 @@ set -euo pipefail
 
 BH_CLONE_ROOT="${BH_CLONE_ROOT:-}"
 if [[ -z "${BH_CLONE_ROOT}" ]]; then
-  # Resolve package root from this file: lib/common.sh -> cli/
   _COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   BH_CLONE_ROOT="$(cd "${_COMMON_DIR}/.." && pwd)"
 fi
-# Repo root (parent of cli/) for docs paths
 BH_REPO_ROOT="$(cd "${BH_CLONE_ROOT}/.." && pwd)"
 
-# Defaults (override via env)
+# Single source of truth for CLI version (bh-clone sources this)
+: "${BH_CLONE_VERSION:=0.2.6}"
+
 : "${BH_MAIN_PROFILE:=${HOME}/.config/google-chrome}"
 : "${BH_CLONE_PROFILE:=${HOME}/.config/browser-harness-chrome-clone}"
 : "${BH_CDP_PORT:=9333}"
@@ -28,11 +28,9 @@ BH_REPO_ROOT="$(cd "${BH_CLONE_ROOT}/.." && pwd)"
 : "${BH_ENV_FILE:=${HOME}/.config/browser-harness/env}"
 : "${BH_CDP_URL:=http://127.0.0.1:${BH_CDP_PORT}}"
 : "${PATH:=${PATH}}"
-# Comma-separated domain suffixes never synced (Google account safety by default).
 : "${BH_EXCLUDE_DOMAINS:=}"
 : "${BH_INCLUDE_GOOGLE:=0}"
 
-# Prefer user-local tools
 export PATH="${HOME}/.local/bin:${PATH}"
 
 log()  { printf '%s\n' "$*"; }
@@ -59,23 +57,38 @@ ensure_state_dir() {
 # --- path / hard-rule guards -------------------------------------------------
 
 _norm_path() {
-  # Resolve to absolute path if exists; else return as-is absolute-ish
   local p="$1"
   if [[ -d "${p}" ]]; then
     (cd "${p}" && pwd -P)
+  elif [[ -e "${p}" ]]; then
+    local d b
+    d="$(cd "$(dirname "${p}")" && pwd -P)"
+    b="$(basename "${p}")"
+    printf '%s/%s\n' "${d}" "${b}"
   else
     printf '%s\n' "${p}"
   fi
 }
 
+# True if profile is empty or is the user's MAIN daily Chrome profile.
+# Empty → true (refuse dangerous ops on empty path).
 is_main_profile_path() {
   local profile="$1"
-  local main="${BH_MAIN_PROFILE}"
-  local home_chrome="${HOME}/.config/google-chrome"
   [[ -z "${profile}" ]] && return 0
-  [[ "${profile}" == "${main}" ]] && return 0
-  [[ "${profile}" == "${home_chrome}" ]] && return 0
-  # resolved compare when both exist
+
+  local main="${BH_MAIN_PROFILE}"
+  local candidates=(
+    "${main}"
+    "${HOME}/.config/google-chrome"
+    "${HOME}/.config/chromium"
+    "${HOME}/.config/google-chrome-stable"
+  )
+  local c
+  for c in "${candidates[@]}"; do
+    [[ -z "${c}" ]] && continue
+    [[ "${profile}" == "${c}" ]] && return 0
+  done
+
   if [[ -d "${profile}" && -d "${main}" ]]; then
     [[ "$(_norm_path "${profile}")" == "$(_norm_path "${main}")" ]] && return 0
   fi
@@ -86,11 +99,9 @@ assert_main_clone_distinct() {
   if is_main_profile_path "${BH_CLONE_PROFILE}"; then
     die "BH_CLONE_PROFILE must not be the main Chrome profile (HARD_RULES): ${BH_CLONE_PROFILE}"
   fi
-  if [[ -n "${BH_CLONE_PROFILE}" && -n "${BH_MAIN_PROFILE}" ]]; then
-    if [[ -d "${BH_CLONE_PROFILE}" && -d "${BH_MAIN_PROFILE}" ]]; then
-      if [[ "$(_norm_path "${BH_CLONE_PROFILE}")" == "$(_norm_path "${BH_MAIN_PROFILE}")" ]]; then
-        die "clone profile path resolves to main profile (HARD_RULES)"
-      fi
+  if [[ -d "${BH_CLONE_PROFILE}" && -d "${BH_MAIN_PROFILE}" ]]; then
+    if [[ "$(_norm_path "${BH_CLONE_PROFILE}")" == "$(_norm_path "${BH_MAIN_PROFILE}")" ]]; then
+      die "clone profile path resolves to main profile (HARD_RULES)"
     fi
   fi
 }
@@ -103,8 +114,12 @@ assert_not_main_profile() {
   fi
 }
 
-# Standard failure when MAIN cookie export cannot proceed.
-# MUST NOT suggest killing/restarting main Chrome.
+# Clone kill/start paths must look like the harness twin (or explicit override).
+is_default_clone_profile() {
+  local profile="${1:-${BH_CLONE_PROFILE}}"
+  [[ "${profile}" == *browser-harness-chrome-clone* ]]
+}
+
 die_main_cookie_export_failed() {
   local detail="${1:-}"
   cat >&2 <<EOF
@@ -154,8 +169,9 @@ wait_cdp() {
 require_browser_harness() {
   require_cmd browser-harness
   require_cmd curl
-  require_cmd google-chrome || require_cmd chromium || true
-  if ! command -v google-chrome >/dev/null 2>&1 && ! command -v chromium >/dev/null 2>&1; then
+  if ! command -v google-chrome >/dev/null 2>&1 \
+    && ! command -v google-chrome-stable >/dev/null 2>&1 \
+    && ! command -v chromium >/dev/null 2>&1; then
     die "google-chrome or chromium not found in PATH"
   fi
 }
@@ -203,7 +219,6 @@ strip_clone_locks() {
 }
 
 enable_remote_debugging_pref() {
-  # ONLY for clone (or other non-main automation profiles). Never rewrite MAIN Local State.
   local profile="${1:-${BH_CLONE_PROFILE}}"
   assert_not_main_profile "${profile}" "enable_remote_debugging_pref"
   local state="${profile}/Local State"
@@ -218,16 +233,13 @@ p.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 PY
 }
 
-# Seed an empty clone profile dir (cookie-only default — no full rsync from main).
 ensure_empty_clone_profile() {
   assert_main_clone_distinct
   assert_not_main_profile "${BH_CLONE_PROFILE}" "ensure_empty_clone_profile"
   mkdir -p "${BH_CLONE_PROFILE}"
   strip_clone_locks "${BH_CLONE_PROFILE}"
-  # Local State may not exist yet; Chrome will create it on first launch
 }
 
-# Optional: main → clone rsync (read main, write clone only). Never stops MAIN.
 rsync_main_to_clone() {
   assert_main_clone_distinct
   assert_not_main_profile "${BH_CLONE_PROFILE}" "rsync_main_to_clone"
@@ -262,45 +274,66 @@ rsync_main_to_clone() {
   enable_remote_debugging_pref "${BH_CLONE_PROFILE}" || true
 }
 
-kill_clone_chrome() {
-  # ONLY the automation twin. Never call this against the main profile.
-  # See docs/HARD_RULES.md — killing MAIN Chrome drops user logins (e.g. grok.com).
-  #
-  # HARDENING: kill ONLY processes whose cmdline contains this clone's
-  # user-data-dir=. Never pkill by binary name. Never fuser -k by port
-  # (port-based kill could hit MAIN if ports collide, e.g. 9222).
-  local profile="${BH_CLONE_PROFILE}"
-  assert_main_clone_distinct
-  assert_not_main_profile "${profile}" "kill_clone_chrome"
-
-  # Extra guard: path must look like the harness clone unless caller overrode intentionally
-  if [[ "${profile}" != *browser-harness-chrome-clone* && "${BH_ALLOW_CUSTOM_CLONE_KILL:-0}" != "1" ]]; then
-    warn "clone profile is non-default (${profile}); set BH_ALLOW_CUSTOM_CLONE_KILL=1 to kill"
-    return 1
-  fi
-
-  # Refuse empty / too-short profile strings (would match too broadly)
+# List PIDs that are safe to kill for the clone profile (stdout: one pid per line).
+# Empty if none. Never includes MAIN. Does not kill.
+list_clone_pids() {
+  local profile="${1:-${BH_CLONE_PROFILE}}"
+  assert_not_main_profile "${profile}" "list_clone_pids"
   if [[ ${#profile} -lt 12 ]]; then
-    die "refuse kill_clone: profile path too short (HARD_RULES): ${profile}"
+    die "refuse list_clone_pids: profile path too short (HARD_RULES): ${profile}"
+  fi
+  if ! is_default_clone_profile "${profile}" && [[ "${BH_ALLOW_CUSTOM_CLONE_KILL:-0}" != "1" ]]; then
+    return 0
   fi
 
   local pids pid cmdline
   pids="$(pgrep -f "user-data-dir=${profile}" 2>/dev/null || true)"
-  if [[ -z "${pids}" ]]; then
-    return 0
-  fi
+  [[ -z "${pids}" ]] && return 0
+
   for pid in ${pids}; do
+    [[ -r "/proc/${pid}/cmdline" ]] || continue
     cmdline="$(tr '\0' ' ' <"/proc/${pid}/cmdline" 2>/dev/null || true)"
-    # Double-check: must contain clone user-data-dir AND must not look like default main profile only
-    if [[ "${cmdline}" != *"user-data-dir=${profile}"* ]]; then
+    # Must match this exact user-data-dir value
+    [[ "${cmdline}" == *"user-data-dir=${profile}"* ]] || continue
+    # Never kill a process that only targets MAIN profile path
+    if is_main_profile_path "${profile}"; then
       continue
     fi
-    if [[ "${cmdline}" == *"user-data-dir=${BH_MAIN_PROFILE}"* && "${profile}" != "${BH_MAIN_PROFILE}" ]]; then
-      # Should not happen if profiles differ; skip paranoid
-      continue
-    fi
-    kill "${pid}" 2>/dev/null || true
+    printf '%s\n' "${pid}"
   done
-  sleep 1
-  # NO fuser -k by port — that is banned (can kill MAIN on shared/wrong port).
+}
+
+kill_clone_chrome() {
+  # ONLY the automation twin. See docs/HARD_RULES.md.
+  # Kill ONLY by clone user-data-dir. No pkill by name. No fuser by port.
+  #
+  # NOTE: do not use process substitution < <(list_clone_pids) — a die() inside
+  # the subshell would not abort this function (HARD_RULES false negative).
+  local profile="${BH_CLONE_PROFILE}"
+  assert_main_clone_distinct
+  assert_not_main_profile "${profile}" "kill_clone_chrome"
+
+  if ! is_default_clone_profile "${profile}" && [[ "${BH_ALLOW_CUSTOM_CLONE_KILL:-0}" != "1" ]]; then
+    warn "clone profile is non-default (${profile}); set BH_ALLOW_CUSTOM_CLONE_KILL=1 to kill"
+    return 1
+  fi
+
+  local pid_file pid any=0
+  pid_file="$(mktemp)"
+  # list_clone_pids may die() on short/main paths — runs in this shell, exits correctly
+  list_clone_pids "${profile}" >"${pid_file}" || {
+    rm -f "${pid_file}"
+    return 1
+  }
+
+  while IFS= read -r pid; do
+    [[ -z "${pid}" ]] && continue
+    any=1
+    kill "${pid}" 2>/dev/null || true
+  done <"${pid_file}"
+  rm -f "${pid_file}"
+
+  if [[ "${any}" == "1" ]]; then
+    sleep 1
+  fi
 }

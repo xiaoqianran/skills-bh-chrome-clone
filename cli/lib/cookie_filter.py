@@ -35,6 +35,8 @@ GOOGLE_FAMILY_SUFFIXES = (
     "blogspot.com",
 )
 
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
 
 def _norm(domain: str) -> str:
     return (domain or "").lower().strip().lstrip(".")
@@ -46,29 +48,27 @@ def _parse_extra(raw: str | None) -> list[str]:
     return [_norm(x) for x in raw.split(",") if _norm(x)]
 
 
+def _env_truthy(name: str, default: str = "0") -> bool:
+    return os.environ.get(name, default).strip().lower() in _TRUTHY
+
+
 def blocked_suffixes(
     extra: str | None = None,
     *,
     include_google: bool | None = None,
 ) -> list[str]:
     if include_google is None:
-        include_google = os.environ.get("BH_INCLUDE_GOOGLE", "0").strip() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
+        include_google = _env_truthy("BH_INCLUDE_GOOGLE")
     suffixes: list[str] = []
     if not include_google:
         suffixes.extend(GOOGLE_FAMILY_SUFFIXES)
     if extra is None:
         extra = os.environ.get("BH_EXCLUDE_DOMAINS", "")
     suffixes.extend(_parse_extra(extra))
-    # de-dupe preserve order
     seen: set[str] = set()
     out: list[str] = []
     for s in suffixes:
-        if s not in seen:
+        if s and s not in seen:
             seen.add(s)
             out.append(s)
     return out
@@ -85,13 +85,16 @@ def domain_blocked(domain: str, suffixes: Iterable[str] | None = None) -> bool:
             continue
         if d == s or d.endswith("." + s):
             return True
-        # google.co.* style already listed; also catch bare google.TLD leftovers
+        # Catch bare google.TLD leftovers when google.com is in the blocklist
         if s == "google.com" and (d == "google" or d.startswith("google.")):
             return True
     return False
 
 
-def filter_cookies(cookies: list[dict], suffixes: Iterable[str] | None = None) -> tuple[list[dict], list[dict]]:
+def filter_cookies(
+    cookies: list[dict],
+    suffixes: Iterable[str] | None = None,
+) -> tuple[list[dict], list[dict]]:
     """Return (kept, dropped)."""
     if suffixes is None:
         suffixes = blocked_suffixes()
@@ -106,7 +109,9 @@ def filter_cookies(cookies: list[dict], suffixes: Iterable[str] | None = None) -
 
 
 def summarize_dropped(dropped: list[dict], limit: int = 12) -> str:
-    hosts = sorted({_norm(str(c.get("domain", ""))) for c in dropped if c.get("domain")})
+    hosts = sorted(
+        {_norm(str(c.get("domain", ""))) for c in dropped if c.get("domain")}
+    )
     if not hosts:
         return "none"
     show = hosts[:limit]

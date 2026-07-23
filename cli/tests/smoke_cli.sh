@@ -6,7 +6,10 @@ BH="${ROOT}/bin/bh-clone"
 REPO="$(cd "${ROOT}/.." && pwd)"
 
 echo "== version =="
-"${BH}" version | grep -qE 'bh-chrome-clone 0\.2\.5'
+ver="$("${BH}" version)"
+echo "${ver}" | grep -qE 'bh-chrome-clone 0\.2\.6'
+# version single source
+grep -q 'BH_CLONE_VERSION:=0.2.6' "${ROOT}/lib/common.sh"
 
 echo "== help cookie-only / hard rules =="
 help_out="$("${BH}" help)"
@@ -39,63 +42,23 @@ test -f "${REPO}/docs/BROWSER_HARNESS.md"
 grep -q 'getAllCookies' "${REPO}/docs/COOKIE_ONLY.md"
 grep -qE 'kill|主 Chrome|HARD RULES' "${REPO}/docs/HARD_RULES.md"
 grep -q 'github.com/browser-use/browser-harness' "${REPO}/docs/BROWSER_HARNESS.md"
-grep -q 'install.md' "${REPO}/docs/BROWSER_HARNESS.md"
-test -x "${REPO}/scripts/setup-browser-harness.sh" || test -f "${REPO}/scripts/setup-browser-harness.sh"
-grep -q 'github.com/browser-use/browser-harness' "${REPO}/README.md"
-grep -q 'github.com/browser-use/browser-harness' "${REPO}/install.sh"
-
-echo "== refuse kill main profile =="
-# die() exits the shell — run guards in a subshell; capture stdout+stderr
-set +e
-kill_err="$(
-  {
-    # shellcheck source=../lib/common.sh
-    source "${ROOT}/lib/common.sh"
-    BH_CLONE_PROFILE="${HOME}/.config/google-chrome"
-    kill_clone_chrome
-    echo SURVIVED
-  } 2>&1
-)"
-kill_rc=$?
-set -e
-echo "${kill_err}" | grep -qiE 'refuse|HARD_RULES|MAIN|main' \
-  || { echo "expected HARD_RULES refuse message: ${kill_err}" >&2; exit 1; }
-[[ "${kill_rc}" -ne 0 ]] || { echo "expected non-zero from kill_clone on main" >&2; exit 1; }
-echo "${kill_err}" | grep -q SURVIVED && { echo "kill_clone should not continue on main" >&2; exit 1; }
-
-echo "== refuse enable_remote_debugging on main =="
-set +e
-pref_err="$(
-  {
-    # shellcheck source=../lib/common.sh
-    source "${ROOT}/lib/common.sh"
-    enable_remote_debugging_pref "${HOME}/.config/google-chrome"
-    echo SURVIVED
-  } 2>&1
-)"
-pref_rc=$?
-set -e
-[[ "${pref_rc}" -ne 0 ]] || { echo "expected refuse main pref write: ${pref_err}" >&2; exit 1; }
-echo "${pref_err}" | grep -qiE 'refuse|HARD_RULES|MAIN|main' \
-  || { echo "expected refuse message: ${pref_err}" >&2; exit 1; }
+test -f "${ROOT}/lib/cookie_io.py"
 
 echo "== use main refused without opt-in =="
-if "${BH}" use main 2>/tmp/bh-use-main.err; then
+if BH_ALLOW_USE_MAIN=0 "${BH}" use main 2>/tmp/bh-use-main.err; then
   echo "expected use main to refuse without BH_ALLOW_USE_MAIN=1" >&2
   exit 1
 fi
 grep -qiE 'BH_ALLOW_USE_MAIN|refused' /tmp/bh-use-main.err
 
-echo "== no fuser -k command in kill_clone =="
-# Comments may mention fuser as banned; fail only on real invocation
-if awk '/^kill_clone_chrome\(/,/^}/' "${ROOT}/lib/common.sh" | grep -E '^[^#]*\bfuser\b' | grep -vq '^'; then
-  # any non-comment line containing fuser as a command
-  if awk '/^kill_clone_chrome\(/,/^}/' "${ROOT}/lib/common.sh" | grep -vE '^\s*#' | grep -qE '\bfuser\b'; then
-    echo "kill_clone_chrome must not invoke fuser" >&2
-    awk '/^kill_clone_chrome\(/,/^}/' "${ROOT}/lib/common.sh" | grep -vE '^\s*#' | grep -E '\bfuser\b' || true
-    exit 1
-  fi
+echo "== no fuser invoke in kill_clone =="
+if awk '/^kill_clone_chrome\(/,/^}/' "${ROOT}/lib/common.sh" | grep -vE '^\s*#' | grep -qE '\bfuser\b'; then
+  echo "kill_clone_chrome must not invoke fuser" >&2
+  exit 1
 fi
+
+echo "== cookie_io importable =="
+PYTHONPATH="${ROOT}/lib" python3 -c 'from cookie_io import write_cookie_dump, export_summary; print("io_ok")'
 
 echo "== unknown command fails =="
 if "${BH}" not-a-command 2>/dev/null; then

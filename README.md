@@ -185,7 +185,14 @@ bh-clone use clone|main           # 只改 env，不杀进程
 
 bh-clone mcp print|json|install-grok|check
 bh-clone doctor
-bh-clone version                  # 0.2.3
+bh-clone version                  # 0.2.6
+```
+
+### 跑测试
+
+```bash
+bash cli/tests/run-tests.sh
+# 或: python3 cli/tests/test_cookie_filter.py && bash cli/tests/test_guards.sh && bash cli/tests/smoke_cli.sh
 ```
 
 ---

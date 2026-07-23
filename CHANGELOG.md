@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.6
+
+### Code quality + tests
+
+- Extract `cli/lib/cookie_io.py` (normalize/export/inject helpers; no secret logging)
+- Rewrite `kill_clone` via `list_clone_pids` (clearer, testable)
+- Expand `is_main_profile_path` (chromium paths); shared `BH_CLONE_VERSION`
+- Slim `sync.sh` harness snippets to use cookie_io
+- Tests: expanded `test_cookie_filter.py`, new `test_guards.sh`, `run-tests.sh`
+
 ## 0.2.5
 
 ### Safety hardening (MAIN never collateral)
