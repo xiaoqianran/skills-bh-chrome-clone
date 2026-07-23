@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# bh-clone — reusable Chrome session twin for browser-harness automation
+set -euo pipefail
+
+# Resolve symlinks so `~/.local/bin/bh-clone` still finds the repo root.
+_SRC="${BASH_SOURCE[0]}"
+while [[ -L "${_SRC}" ]]; do
+  _DIR="$(cd "$(dirname "${_SRC}")" && pwd)"
+  _SRC="$(readlink "${_SRC}")"
+  [[ "${_SRC}" != /* ]] && _SRC="${_DIR}/${_SRC}"
+done
+ROOT="$(cd "$(dirname "${_SRC}")/.." && pwd)"
+unset _SRC _DIR
+# shellcheck source=../lib/common.sh
+source "${ROOT}/lib/common.sh"
+
+usage() {
+  cat <<'USAGE'
+bh-clone — Chrome session twin for browser-harness
+
+Usage:
+  bh-clone <command> [args]
+
+Commands:
+  init                 First-time setup (profile rsync + cookie sync)
+  sync [--with-profile]
+                       Export cookies from main Chrome → inject clone
+                       --with-profile also rsyncs profile files
+  ensure               Start clone Chrome with CDP if not running
+  use clone|main       Switch browser-harness target
+  doctor               Health check (CDP, cookies, bilibili login)
+  status               Alias of doctor
+  version              Print version
+  help                 Show this help
+
+Environment (optional):
+  BH_MAIN_PROFILE   default: ~/.config/google-chrome
+  BH_CLONE_PROFILE  default: ~/.config/browser-harness-chrome-clone
+  BH_CDP_PORT       default: 9333
+  BH_COOKIE_FILE    default: ~/.config/browser-harness/main-cookies.json
+  BH_ENV_FILE       default: ~/.config/browser-harness/env
+
+Examples:
+  bh-clone init
+  bh-clone sync
+  bh-clone use clone
+  export BU_CDP_URL=http://127.0.0.1:9333
+  browser-harness <<'PY'
+  new_tab("https://www.bilibili.com/")
+  print(page_info())
+  PY
+USAGE
+}
+
+VERSION="0.1.0"
+
+cmd="${1:-help}"
+shift || true
+
+case "${cmd}" in
+  init)
+    bash "${ROOT}/scripts/init.sh" "$@"
+    ;;
+  sync)
+    bash "${ROOT}/scripts/sync.sh" "$@"
+    ;;
+  ensure)
+    bash "${ROOT}/scripts/ensure.sh" "$@"
+    ;;
+  use)
+    target="${1:-}"
+    case "${target}" in
+      clone|isolated) bash "${ROOT}/scripts/use-clone.sh" ;;
+      main)           bash "${ROOT}/scripts/use-main.sh" ;;
+      *) die "usage: bh-clone use clone|main" ;;
+    esac
+    ;;
+  doctor|status)
+    bash "${ROOT}/scripts/doctor.sh" "$@"
+    ;;
+  version|--version|-V)
+    echo "bh-chrome-clone ${VERSION}"
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    usage >&2
+    die "unknown command: ${cmd}"
+    ;;
+esac
