@@ -22,6 +22,7 @@ check() {
 
 echo "=== bh-chrome-clone doctor ==="
 echo "version intent: dual client (browser-harness + chrome-devtools)"
+echo "HARD_RULES: never kill/restart MAIN Chrome — see docs/HARD_RULES.md"
 echo "BH_CLONE_ROOT     = ${BH_CLONE_ROOT}"
 echo "BH_MAIN_PROFILE   = ${BH_MAIN_PROFILE}"
 echo "BH_CLONE_PROFILE  = ${BH_CLONE_PROFILE}"
@@ -62,6 +63,8 @@ fi
 
 echo
 echo "=== browser-harness client ==="
+# bilibili probe is OPTIONAL: not an install gate (HARD_RULES / user may not use bilibili).
+# Use BH_DOCTOR_BILI=1 to require isLogin=true as a hard fail.
 if command -v browser-harness >/dev/null 2>&1; then
   check "browser-harness binary" ok "$(browser-harness --version 2>/dev/null || echo installed)"
   if cdp_ready "${BH_CDP_PORT}"; then
@@ -78,14 +81,20 @@ d = json.loads(text)
 raise SystemExit(0 if d.get("data", {}).get("isLogin") is True else 2)
 PY
     then
-      check "harness login probe (bilibili)" ok "isLogin=true"
+      check "harness CDP smoke (bilibili nav)" ok "isLogin=true"
       sed 's/^/        /' /tmp/bh-clone-doctor-harness.txt | head -5
     else
-      check "harness login probe (bilibili)" fail "run: bh-clone sync"
-      sed 's/^/        /' /tmp/bh-clone-doctor-harness.txt 2>/dev/null | head -8 || true
+      if [[ "${BH_DOCTOR_BILI:-0}" == "1" ]]; then
+        check "harness bilibili login (required)" fail "run: bh-clone sync (user must Allow on main — do NOT kill main Chrome)"
+      else
+        # informational only — do not count as hard fail
+        printf '  [info ] harness bilibili login — not logged in (optional; not an install failure)\n'
+        printf '         set BH_DOCTOR_BILI=1 to require bilibili isLogin\n'
+        sed 's/^/        /' /tmp/bh-clone-doctor-harness.txt 2>/dev/null | head -4 || true
+      fi
     fi
   else
-    check "harness login probe" fail "CDP down"
+    check "harness CDP smoke" fail "clone CDP down — run: bh-clone ensure (never kill MAIN Chrome)"
   fi
 else
   check "browser-harness binary" fail "uv tool install --python 3.12 browser-harness"

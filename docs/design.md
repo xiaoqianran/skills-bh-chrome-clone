@@ -11,6 +11,16 @@
 - Perfect browser fingerprint cloning.
 - Replacing opencli site adapters.
 - Auto-connecting to the main browser by default.
+- **Managing / restarting / debugging the user's daily main Chrome process.**
+
+## Safety non-negotiables
+
+See **[HARD_RULES.md](HARD_RULES.md)**. Agents and scripts must:
+
+- Never kill or relaunch the main Chrome profile.
+- Never rewrite main profile locks, Local State, or cookies.
+- Only automate against the clone (`:9333` / `browser-harness-chrome-clone`).
+- Treat site-login probes (e.g. bilibili in doctor) as optional, not install gates.
 
 ## Data flow
 

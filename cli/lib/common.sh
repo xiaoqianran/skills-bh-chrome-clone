@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # Shared helpers for bh-chrome-clone
+#
+# HARD RULES (see docs/HARD_RULES.md):
+# - NEVER kill/restart the user's MAIN Chrome (~/.config/google-chrome).
+# - kill_clone_chrome / ensure only touch BH_CLONE_PROFILE (:9333).
+# - Do not rewrite main profile Singleton* / Local State / Cookies.
 # shellcheck disable=SC2034
 
 set -euo pipefail
@@ -119,7 +124,13 @@ strip_clone_locks() {
 }
 
 enable_remote_debugging_pref() {
+  # ONLY for clone (or other non-main automation profiles). Never rewrite MAIN Local State.
   local profile="${1:-${BH_CLONE_PROFILE}}"
+  local main_profile="${BH_MAIN_PROFILE}"
+  if [[ -z "${profile}" || "${profile}" == "${main_profile}" || "${profile}" == "${HOME}/.config/google-chrome" ]]; then
+    warn "refuse enable_remote_debugging_pref on main/default profile (HARD_RULES)"
+    return 1
+  fi
   local state="${profile}/Local State"
   [[ -f "${state}" ]] || return 0
   python3 - "${state}" <<'PY'
@@ -133,8 +144,29 @@ PY
 }
 
 kill_clone_chrome() {
+  # ONLY the automation twin. Never call this against the main profile.
+  # See docs/HARD_RULES.md — killing MAIN Chrome drops user logins (e.g. grok.com).
   local profile="${BH_CLONE_PROFILE}"
   local port="${BH_CDP_PORT}"
+  local main_profile="${BH_MAIN_PROFILE}"
+
+  if [[ -z "${profile}" || "${profile}" == "${main_profile}" ]]; then
+    die "refuse to kill: clone profile empty or equals main profile (HARD_RULES)"
+  fi
+  case "${profile}" in
+    *google-chrome*|*chromium*|*microsoft-edge*)
+      # Clone path must be the dedicated harness dir, not a browser default profile.
+      if [[ "${profile}" == "${main_profile}" || "${profile}" == "${HOME}/.config/google-chrome" ]]; then
+        die "refuse to kill main-like profile: ${profile} (HARD_RULES)"
+      fi
+      ;;
+  esac
+  # Extra guard: path must look like the harness clone unless caller overrode intentionally
+  if [[ "${profile}" != *browser-harness-chrome-clone* && "${BH_ALLOW_CUSTOM_CLONE_KILL:-0}" != "1" ]]; then
+    warn "clone profile is non-default (${profile}); set BH_ALLOW_CUSTOM_CLONE_KILL=1 to kill"
+    return 1
+  fi
+
   # Kill by user-data-dir match (avoid -f pkill self-match patterns in wrappers)
   local pids
   pids="$(pgrep -f "user-data-dir=${profile}" 2>/dev/null || true)"
@@ -143,7 +175,7 @@ kill_clone_chrome() {
     kill ${pids} 2>/dev/null || true
     sleep 1
   fi
-  # Best-effort free port
+  # Best-effort free port (clone CDP only)
   if command -v fuser >/dev/null 2>&1; then
     fuser -k "${port}/tcp" 2>/dev/null || true
   fi

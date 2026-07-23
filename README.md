@@ -166,6 +166,7 @@ bh-clone version                  # 0.2.x
 
 ```text
 skills-bh-chrome-clone/
+├── docs/HARD_RULES.md                # ⛔ 绝对禁止事项（Agent 必读）
 ├── skills/bh-chrome-clone/SKILL.md   # Agent Skill
 ├── cli/                              # bh-clone 实现
 │   ├── bin/bh-clone
@@ -198,14 +199,36 @@ skills-bh-chrome-clone/
 - **勿提交** cookies / clone profile  
 - Clone = 第二份登录钥匙，仅本机使用  
 
+### ⛔ 主浏览器绝对禁止（Agent / 脚本）
+
+**权威全文：[docs/HARD_RULES.md](docs/HARD_RULES.md)**（与任何示例冲突时以它为准）
+
+| 禁止 | 说明 |
+|------|------|
+| 杀 / 重启主 Chrome | 会导致 grok.com 等**日常登录丢失**，且不可从本仓库恢复 |
+| 删主 profile `Singleton*` | 逼退日常浏览器 |
+| 改主 profile `Local State` / Cookies / Storage | 破坏用户数据 |
+| 主 profile + `--remote-debugging-port` 强行重启 | Chrome 新版本会拒，且伤会话 |
+| 在主浏览器上清 cookie | 只允许对 **clone** 注入/过滤 |
+
+主浏览器 **只**允许：用户本人使用；`bh-clone sync` 只读导出 cookie（Allow 弹窗由**用户**点）。  
+导出失败 → **停下来告诉用户**，禁止「杀主浏览器曲线救国」。
+
+自动化 **只**碰：
+
+- profile：`~/.config/browser-harness-chrome-clone`  
+- CDP：`http://127.0.0.1:9333`  
+
+`bh-clone doctor` 里 bilibili 未登录 **不等于** 安装失败。
+
 ---
 
 ## 验证（曾实测）
 
-见 [references/verification.md](references/verification.md)：
+见 [references/verification.md](references/verification.md)（**可选**场景，非安装必过门槛）：
 
 - clone CDP ready  
-- bilibili `isLogin: true`  
+- bilibili `isLogin: true`（仅当你在测 B 站登录时）  
 - 搜索「清华学生如何学习」有真实结果  
 
 ---

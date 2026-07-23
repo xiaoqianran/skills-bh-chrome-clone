@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.2
+
+### Docs / Safety (HARD RULES)
+
+- Add **[docs/HARD_RULES.md](docs/HARD_RULES.md)**: absolute bans on killing/reconfiguring the user's **main** Chrome
+- Wire rules into `AGENTS.md`, Skill, README, design, architecture
+- Clarify: doctor bilibili probe is optional, not an install gate
+- `kill_clone_chrome` guards: refuse main-like profiles; only default clone path unless override
+
+### Why
+
+Agents must never "fix" CDP/sync by restarting daily Chrome — that can wipe logins (e.g. grok.com) permanently.
+
 ## 0.2.1
 
 ### Security

@@ -54,6 +54,7 @@ export PYTHONPATH="${BH_CLONE_ROOT}/lib${PYTHONPATH:+:${PYTHONPATH}}"
 
 info "[1/4] export cookies from MAIN Chrome (Google-family excluded by default)"
 info "  (may prompt 'Allow remote debugging?' once — click Allow)"
+info "  HARD_RULES: never kill/restart main Chrome if this fails — stop and ask the user"
 unset BU_CDP_URL BU_CDP_WS || true
 browser-harness --reload >/dev/null 2>&1 || true
 
