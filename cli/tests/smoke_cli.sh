@@ -6,7 +6,7 @@ BH="${ROOT}/bin/bh-clone"
 REPO="$(cd "${ROOT}/.." && pwd)"
 
 echo "== version =="
-"${BH}" version | grep -qE 'bh-chrome-clone 0\.2\.3'
+"${BH}" version | grep -qE 'bh-chrome-clone 0\.2\.4'
 
 echo "== help cookie-only / hard rules =="
 help_out="$("${BH}" help)"
@@ -35,8 +35,14 @@ echo "${sync_help}" | grep -q 'never kill'
 echo "== docs present =="
 test -f "${REPO}/docs/HARD_RULES.md"
 test -f "${REPO}/docs/COOKIE_ONLY.md"
+test -f "${REPO}/docs/BROWSER_HARNESS.md"
 grep -q 'getAllCookies' "${REPO}/docs/COOKIE_ONLY.md"
 grep -qE 'kill|主 Chrome|HARD RULES' "${REPO}/docs/HARD_RULES.md"
+grep -q 'github.com/browser-use/browser-harness' "${REPO}/docs/BROWSER_HARNESS.md"
+grep -q 'install.md' "${REPO}/docs/BROWSER_HARNESS.md"
+test -x "${REPO}/scripts/setup-browser-harness.sh" || test -f "${REPO}/scripts/setup-browser-harness.sh"
+grep -q 'github.com/browser-use/browser-harness' "${REPO}/README.md"
+grep -q 'github.com/browser-use/browser-harness' "${REPO}/install.sh"
 
 echo "== refuse kill main profile =="
 # die() exits the shell — run guards in a subshell; capture stdout+stderr

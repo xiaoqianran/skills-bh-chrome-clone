@@ -34,3 +34,12 @@ CLONE ~/.config/browser-harness-chrome-clone + :9333 → automation only
 If CDP export needs a non-default profile, use a **temporary copy** user-data-dir — do **not** stop the user's live main browser.
 
 Full ban list: [docs/HARD_RULES.md](../docs/HARD_RULES.md).
+
+## Upstream browser-harness
+
+Not vendored. New environments must install:
+
+- https://github.com/browser-use/browser-harness  
+- https://github.com/browser-use/browser-harness/blob/main/install.md  
+
+Integration notes: [docs/BROWSER_HARNESS.md](../docs/BROWSER_HARNESS.md).

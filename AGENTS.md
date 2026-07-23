@@ -1,10 +1,25 @@
 # Agent notes — skills-bh-chrome-clone
 
+## 上游 browser-harness（新环境必装）
+
+本仓库 **不包含** harness 本体。新机器必须先装官方：
+
+| | URL |
+|--|-----|
+| **GitHub** | https://github.com/browser-use/browser-harness |
+| **install.md** | https://github.com/browser-use/browser-harness/blob/main/install.md |
+| 本仓库对接说明 | [docs/BROWSER_HARNESS.md](docs/BROWSER_HARNESS.md) |
+| 一键脚本 | `./scripts/setup-browser-harness.sh` |
+
+只装 `bh-clone` 而没装上游 harness = **配置不完整**。  
+装完后注册 `browser-harness` skill（`browser-harness skill > …/SKILL.md`），并 `export BU_CDP_URL=http://127.0.0.1:9333`。
+
 ## ⛔ HARD RULES + cookie-only（先读这个）
 
 **完整条文：**
 - [docs/HARD_RULES.md](docs/HARD_RULES.md) — 禁止事项（冲突时以它为准）
 - [docs/COOKIE_ONLY.md](docs/COOKIE_ONLY.md) — 默认只复制 cookie 的模型
+- [docs/BROWSER_HARNESS.md](docs/BROWSER_HARNESS.md) — 上游官方地址与安装
 
 ### 模型
 

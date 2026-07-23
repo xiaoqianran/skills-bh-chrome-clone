@@ -18,10 +18,24 @@ MAIN ──read getAllCookies──► JSON ──write setCookies──► CLON
 
 CLI: `bh-clone` (install from this repo).
 
+## Upstream browser-harness (required on new machines)
+
+This skill does **not** ship browser-harness. Install official:
+
+- **Repo:** https://github.com/browser-use/browser-harness  
+- **Install:** https://github.com/browser-use/browser-harness/blob/main/install.md  
+- **This repo:** [`docs/BROWSER_HARNESS.md`](../../docs/BROWSER_HARNESS.md) · `./scripts/setup-browser-harness.sh`  
+
+Then: `bh-clone up` + `export BU_CDP_URL=http://127.0.0.1:9333`.  
+Register the official skill: `browser-harness skill > ~/.grok/skills/browser-harness/SKILL.md` (and codex/claude). Restart the agent host.
+
 ## ⛔ HARD RULES + cookie-only — 违反即事故
 
 - [`docs/HARD_RULES.md`](../../docs/HARD_RULES.md) — 禁止事项（冲突时以它为准）  
 - [`docs/COOKIE_ONLY.md`](../../docs/COOKIE_ONLY.md) — 默认只复制 cookie  
+- [`docs/BROWSER_HARNESS.md`](../../docs/BROWSER_HARNESS.md) — 上游 harness 官方地址  
+
+
 
 ### 绝对禁止（主浏览器）
 
@@ -63,8 +77,10 @@ CLI: `bh-clone` (install from this repo).
 ## Prerequisites
 
 ```bash
-uv tool install --python 3.12 --upgrade browser-harness
-./install.sh   # from repo root
+# Upstream (required): https://github.com/browser-use/browser-harness
+# Full steps: https://github.com/browser-use/browser-harness/blob/main/install.md
+./scripts/setup-browser-harness.sh   # or follow install.md manually
+./install.sh                         # this repo CLI + skills (+ harness if not skipped)
 ```
 
 Chrome/Chromium required. Main profile default: `~/.config/google-chrome` — **read/export only via bh-clone sync, never kill.**
@@ -132,6 +148,9 @@ bh-clone doctor
 
 - `docs/HARD_RULES.md` ← **必读**
 - `docs/COOKIE_ONLY.md` ← **默认模型**
+- `docs/BROWSER_HARNESS.md` ← **上游官方 GitHub + 新环境配置**
+- https://github.com/browser-use/browser-harness
+- https://github.com/browser-use/browser-harness/blob/main/install.md
 - `references/chrome-devtools-mcp.md`
 - `references/architecture.md`
 - `docs/design.md`

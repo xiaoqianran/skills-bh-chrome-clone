@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.4
+
+### Docs / new-env harness
+
+- Pin **upstream** browser-harness GitHub in-repo so new machines are not incomplete:
+  - https://github.com/browser-use/browser-harness
+  - https://github.com/browser-use/browser-harness/blob/main/install.md
+- Add [docs/BROWSER_HARNESS.md](docs/BROWSER_HARNESS.md) + `scripts/setup-browser-harness.sh`
+- `./install.sh` runs harness setup by default (`BH_SKIP_HARNESS=1` to skip)
+- README / AGENTS / Skill / env.example link official install.md
+
 ## 0.2.3
 
 ### Cookie-only model (default)

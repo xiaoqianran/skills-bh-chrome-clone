@@ -2,10 +2,16 @@
 
 **Agent Skill + CLI** — 把主 Chrome 的登录态同步到**独立自动化浏览器**（CDP `:9333`），同时给：
 
-1. **[browser-harness](https://github.com/browser-use/browser-harness)**  
+1. **[browser-harness](https://github.com/browser-use/browser-harness)**（**上游官方**，本仓库不内嵌；安装见 [install.md](https://github.com/browser-use/browser-harness/blob/main/install.md)）  
 2. **[chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp)**  
 
 用，**不要**对日常主浏览器 `--auto-connect`。
+
+| 上游 | 地址 |
+|------|------|
+| browser-harness 仓库 | https://github.com/browser-use/browser-harness |
+| browser-harness 安装 | https://github.com/browser-use/browser-harness/blob/main/install.md |
+| 本仓库如何对接 harness | [docs/BROWSER_HARNESS.md](docs/BROWSER_HARNESS.md) |
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -46,18 +52,20 @@
 
 ## 完整安装（从头到尾）
 
+> **新环境注意：** 只 clone 本仓库不够。必须同时按上游装好  
+> **[browser-use/browser-harness](https://github.com/browser-use/browser-harness)**  
+> （[install.md](https://github.com/browser-use/browser-harness/blob/main/install.md)）。  
+> 详见 [docs/BROWSER_HARNESS.md](docs/BROWSER_HARNESS.md)。
+
 ### 0. 依赖
 
 - Google Chrome / Chromium  
 - [uv](https://github.com/astral-sh/uv) + Python 3.12  
 - `curl` `rsync` `bash` `python3`  
 - （可选）Grok / 其他 MCP 宿主  
+- **上游：** [browser-harness](https://github.com/browser-use/browser-harness)
 
-```bash
-uv tool install --python 3.12 --upgrade browser-harness
-```
-
-### 1. 安装本仓库
+### 1. 安装本仓库（会尝试配置上游 harness）
 
 ```bash
 git clone https://github.com/xiaoqianran/skills-bh-chrome-clone.git
@@ -65,9 +73,21 @@ cd skills-bh-chrome-clone
 ./install.sh
 # → ~/.local/bin/bh-clone
 # → ~/.grok/skills/bh-chrome-clone（及 codex/claude 若存在）
+# → 默认再跑 ./scripts/setup-browser-harness.sh（官方 harness + skill）
+#    跳过 harness：BH_SKIP_HARNESS=1 ./install.sh
 ```
 
 确保 `~/.local/bin` 在 `PATH` 中。
+
+仅补装 / 重装上游 harness：
+
+```bash
+./scripts/setup-browser-harness.sh
+# 等价于官方:
+#   uv tool install --python 3.12 --upgrade --force browser-harness
+#   browser-harness skill > ~/.codex/skills/browser-harness/SKILL.md  # 等
+# 文档: https://github.com/browser-use/browser-harness/blob/main/install.md
+```
 
 ### 2. 首次建立 session twin（cookie-only）
 
@@ -79,7 +99,12 @@ bh-clone init
 bh-clone doctor
 ```
 
-### 3. 配置 browser-harness
+### 3. 配置 browser-harness → 指向 clone
+
+上游 skill / daemon 的用法以官方为准：  
+https://github.com/browser-use/browser-harness  
+
+本仓库侧只负责把 **CDP 指到 clone**（官方支持 `BU_CDP_URL`）：
 
 ```bash
 bh-clone up
@@ -87,9 +112,10 @@ export BU_CDP_URL=http://127.0.0.1:9333
 # 或: source ~/.config/browser-harness/env
 
 browser-harness <<'PY'
-new_tab("https://www.bilibili.com/")
+ensure_real_tab()
 print(page_info())
 PY
+browser-harness --doctor
 ```
 
 ### 4. 配置 chrome-devtools MCP（关键）
@@ -170,6 +196,8 @@ bh-clone version                  # 0.2.3
 skills-bh-chrome-clone/
 ├── docs/HARD_RULES.md                # ⛔ 绝对禁止事项（Agent 必读）
 ├── docs/COOKIE_ONLY.md               # 默认只复制 cookie 模型
+├── docs/BROWSER_HARNESS.md           # 上游 harness 官方地址与新环境配置
+├── scripts/setup-browser-harness.sh  # 按官方 install.md 装 harness + skill
 ├── skills/bh-chrome-clone/SKILL.md   # Agent Skill
 ├── cli/                              # bh-clone 实现
 │   ├── bin/bh-clone
