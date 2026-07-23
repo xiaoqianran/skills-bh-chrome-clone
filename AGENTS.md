@@ -1,43 +1,50 @@
 # Agent notes — skills-bh-chrome-clone
 
-## ⛔ HARD RULES（先读这个）
+## ⛔ HARD RULES + cookie-only（先读这个）
 
-**完整条文：[docs/HARD_RULES.md](docs/HARD_RULES.md) — 与任何其他说明冲突时以它为准。**
+**完整条文：**
+- [docs/HARD_RULES.md](docs/HARD_RULES.md) — 禁止事项（冲突时以它为准）
+- [docs/COOKIE_ONLY.md](docs/COOKIE_ONLY.md) — 默认只复制 cookie 的模型
 
-### 主浏览器（用户日常 Chrome）——绝对禁止
+### 模型
 
-- **禁止** kill / pkill / killall / SIGTERM / SIGKILL 主 Chrome / Chromium  
-- **禁止** 为开远程调试、sync、init、doctor 而**重启**主浏览器  
-- **禁止** 删除或改写主 profile 的 `Singleton*`、`Local State`、`Preferences`、Cookies / Storage  
-- **禁止** 向主 profile 写回数据；**禁止**在主浏览器上 `deleteCookies` / 清站点数据  
-- **禁止** 用主 profile + `--remote-debugging-port` 强行拉起「调试版日常浏览器」  
+```text
+MAIN ──read getAllCookies──► JSON ──write setCookies──► CLONE :9333
+```
 
-主浏览器登录态（含 **grok.com**、邮箱、银行等）属于用户财产。  
-**强杀主 Chrome = 可导致登录全部丢失且不可从本仓库恢复。**
+- **MAIN**：只读源；进程与 profile **零改动**  
+- **CLONE**：唯一可写、可杀、可重启  
+- **失败**：导出失败就停（CLI 已打印标准说明），禁止杀 MAIN fallback  
+
+### 主浏览器——绝对禁止
+
+- **禁止** kill / 重启主 Chrome（含「为了开远程调试」）  
+- **禁止** 删/改主 profile 的 Singleton*、Local State、Cookies、Storage  
+- **禁止** 主 profile + `--remote-debugging-port`  
+- **禁止** 在主浏览器上 deleteCookies / 清站点 / 写回 clone 数据  
 
 ### 你只应操作
 
-| 对象 | 路径 / 端口 | 允许 |
-|------|-------------|------|
-| **Clone only** | `~/.config/browser-harness-chrome-clone` | ensure / sync 注入 / kill_clone |
-| **Clone CDP** | `http://127.0.0.1:9333` | harness + chrome-devtools |
-| **Cookie 文件** | `~/.config/browser-harness/main-cookies.json` | 读写但不打印、不提交 |
-| **主 Chrome** | 默认 profile | 仅 `bh-clone sync` 只读导出；Allow 弹窗 → **请用户点** |
+| 对象 | 允许 |
+|------|------|
+| `bh-clone sync` / `init` | MAIN 只读导出 + CLONE 注入（默认 cookie-only） |
+| `bh-clone ensure` / `up` | 只动 clone |
+| cookie JSON | 读写但不打印、不提交 |
+| MCP | `--browserUrl http://127.0.0.1:9333`，禁止 `--auto-connect` |
 
-### 导出 cookie 失败时
+### 导出失败
 
 ```text
-停下来 → 告诉用户如何 Allow remote debugging
-      → 或先只 bh-clone ensure 起 clone
-      → 禁止杀主浏览器「曲线救国」
+停 → 请用户 chrome://inspect/#remote-debugging Allow
+   → 再 bh-clone sync
+   → 禁止杀主浏览器
 ```
 
 ### 其它
 
-- 不要把 cookie 内容打进聊天  
 - 不要默认 `--include-google`  
-- **不要**把 bilibili / 某站登录当成安装成功条件；用户没点名就不要测站、不要逼登录  
-- chrome-devtools：**禁止** `--auto-connect` 主浏览器；必须 `--browserUrl http://127.0.0.1:9333`
+- 不要把 bilibili/某站登录当安装成功条件；用户没点名不要测站  
+- 不要把 cookie 打进聊天
 
 ---
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.3
+
+### Cookie-only model (default)
+
+- Default path is **only copy cookies**: MAIN read → JSON → CLONE write
+- `init` / `sync` no longer require full profile rsync; empty clone dir if missing
+- `--with-profile` remains optional (rsync main→clone; still never stops MAIN)
+- Export failure → `die_main_cookie_export_failed` standard message (Allow in MAIN; never kill MAIN)
+- Guards: `assert_main_clone_distinct`, refuse strip/kill/pref-write on MAIN
+- Docs: [docs/COOKIE_ONLY.md](docs/COOKIE_ONLY.md); help/SKILL/AGENTS/README aligned
+- Version **0.2.3**
+
 ## 0.2.2
 
 ### Docs / Safety (HARD RULES)

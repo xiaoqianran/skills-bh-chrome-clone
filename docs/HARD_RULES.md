@@ -9,6 +9,14 @@
 
 **主 Chrome = 用户的日常浏览器。Agent 只能读 cookie（经 `bh-clone sync` 既定流程），绝不能杀、改、重启、锁、清主浏览器。**
 
+默认模型是 **cookie-only**（详见 [COOKIE_ONLY.md](COOKIE_ONLY.md)）：
+
+```text
+MAIN ──read──► JSON ──write──► CLONE
+```
+
+没有第四步「修主浏览器」。导出失败就停。
+
 自动化只允许操作 **clone**：
 
 | | 主浏览器（MAIN） | 自动化 clone（TWIN） |

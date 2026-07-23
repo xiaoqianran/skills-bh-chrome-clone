@@ -1,49 +1,49 @@
 ---
 name: bh-chrome-clone
-description: "Chrome session twin for browser-harness and chrome-devtools MCP: copy login cookies into a dedicated CDP browser (:9333), avoid main-browser Allow popups. Use when: authenticated automation, bilibili/session sites, bh-clone, or configuring chrome-devtools without auto-connect. NEVER kill or reconfigure the user's daily main Chrome."
+description: "Cookie-only Chrome session twin: READ cookies from main Chrome, WRITE into dedicated clone on CDP :9333 for browser-harness and chrome-devtools MCP. NEVER kill/restart/rewrite the user's daily main Chrome. Use when: authenticated automation, bh-clone, or chrome-devtools without auto-connect."
 ---
 
 # bh-chrome-clone
 
-One **automation Chrome** (session twin) shared by:
+**Cookie-only session twin** shared by:
 
 | Client | How it connects |
 |--------|-----------------|
 | **browser-harness** | `export BU_CDP_URL=http://127.0.0.1:9333` |
 | **chrome-devtools MCP** | `--browserUrl http://127.0.0.1:9333` (**not** `--auto-connect`) |
 
-Cookies come from the user's **main** Chrome via CDP export → inject (profile rsync alone is not enough).
+```text
+MAIN ──read getAllCookies──► JSON ──write setCookies──► CLONE :9333
+```
 
 CLI: `bh-clone` (install from this repo).
 
-## ⛔ HARD RULES — 违反即事故
+## ⛔ HARD RULES + cookie-only — 违反即事故
 
-**权威全文：仓库内 [`docs/HARD_RULES.md`](../../docs/HARD_RULES.md)（冲突时以它为准）。**
+- [`docs/HARD_RULES.md`](../../docs/HARD_RULES.md) — 禁止事项（冲突时以它为准）  
+- [`docs/COOKIE_ONLY.md`](../../docs/COOKIE_ONLY.md) — 默认只复制 cookie  
 
-### 绝对禁止（主浏览器 = 用户日常 Chrome）
+### 绝对禁止（主浏览器）
 
-1. **禁止** kill / pkill / killall / 强杀 **主** Chrome / Chromium 进程  
-2. **禁止** 为开远程调试、init、sync、doctor 而**重启**主浏览器  
-3. **禁止** 删除/改写主 profile 的 `Singleton*`、`Local State`、`Preferences`、Cookies、Storage  
-4. **禁止** 用主 profile 加 `--remote-debugging-port` 拉起「调试版日常浏览器」  
-5. **禁止** 在主浏览器上 `Network.deleteCookies` / 清站点数据 / 向主 profile 写回  
-6. **禁止** 把 cookie 明文打进对话或 git  
-7. **禁止** 默认 `--include-google`；**禁止** 未要求就测 bilibili/grok 等站登录  
-
-强杀主 Chrome 可导致 **grok.com 等登录永久丢失**。不要重演。
+1. **禁止** kill / 重启 **主** Chrome  
+2. **禁止** 删/改主 profile Singleton* / Local State / Cookies / Storage  
+3. **禁止** 主 profile + `--remote-debugging-port`  
+4. **禁止** 在主浏览器上 deleteCookies / 写回  
+5. **禁止** 导出失败后用「杀主浏览器」fallback  
+6. **禁止** 打印 cookie；默认不要 `--include-google`  
+7. **禁止** 未要求就测 bilibili/grok 登录  
 
 ### 允许
 
-- 只操作 clone：`~/.config/browser-harness-chrome-clone` + `:9333`  
-- `bh-clone ensure|up|sync|doctor|mcp …`  
-- sync 时 **请用户** 在主 Chrome 点一次 Allow；导出失败就停，**不要**杀主浏览器曲线救国  
+- `bh-clone sync|init|ensure|up|doctor|mcp …`  
+- MAIN 只读导出；CLONE 注入；kill **仅** clone  
+- 导出失败：CLI 会打印标准说明 → **请用户** Allow → 再 sync  
 
-### 导出 cookie 失败时
+### 导出失败
 
 ```text
-告知用户 → chrome://inspect/#remote-debugging 允许调试
-或先 ensure clone，登录态等用户允许后再 sync
-禁止：kill 主 Chrome / 删 Singleton / 改 Local State / 主 profile 开 RDP 重启
+停 → 用户 chrome://inspect/#remote-debugging Allow → bh-clone sync
+禁止：kill 主 Chrome / 删 Singleton / 改 Local State
 ```
 
 ---
@@ -54,7 +54,7 @@ CLI: `bh-clone` (install from this repo).
 |-----------|--------|
 | Need logged-in automation | `bh-clone up` then harness / chrome-devtools |
 | Site login missing **and user needs that site** | `bh-clone sync` (Allow **once** on main if prompted) |
-| First machine setup | `./install.sh` → `bh-clone init` → `mcp install-grok`（**不动**主进程） |
+| First machine setup | `./install.sh` → `bh-clone init`（cookie-only）→ `mcp install-grok`（**不动**主进程） |
 | chrome-devtools still on main | `bh-clone mcp install-grok` + restart MCP host |
 | Public static page | Prefer curl/fetch — no browser |
 
@@ -116,11 +116,13 @@ Treat optional site-login probes as informational unless the user asked for that
 5. Skill + CLI only — not a new MCP server.
 6. **Never sync Google-family cookies by default.** No `--include-google` unless user explicitly accepts risk.
 7. **Never kill, reconfigure, or wipe the user's main Chrome.** See `docs/HARD_RULES.md`.
+8. **Default is cookie-only** (`docs/COOKIE_ONLY.md`); `--with-profile` is optional.
 
 ## Command map
 
 ```text
-bh-clone init | sync [--with-profile] | ensure | up [--sync]
+bh-clone init [--with-profile]
+bh-clone sync [--with-profile] | ensure | up [--sync]
 bh-clone use clone|main
 bh-clone mcp print|json|install-grok|check
 bh-clone doctor
@@ -129,6 +131,7 @@ bh-clone doctor
 ## See also
 
 - `docs/HARD_RULES.md` ← **必读**
+- `docs/COOKIE_ONLY.md` ← **默认模型**
 - `references/chrome-devtools-mcp.md`
 - `references/architecture.md`
 - `docs/design.md`

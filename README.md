@@ -69,11 +69,13 @@ cd skills-bh-chrome-clone
 
 确保 `~/.local/bin` 在 `PATH` 中。
 
-### 2. 首次建立 session twin
+### 2. 首次建立 session twin（cookie-only）
 
 ```bash
 bh-clone init
-# 主 Chrome 可能提示 Allow remote debugging — 点一次 Allow
+# 默认只复制 cookie，不杀/不改主浏览器
+# 若导出失败：在主 Chrome 打开 chrome://inspect/#remote-debugging 点 Allow，再 bh-clone sync
+# 可选全量 profile：bh-clone init --with-profile
 bh-clone doctor
 ```
 
@@ -149,15 +151,15 @@ Google 相关操作请用主 Chrome 手动完成，或临时 `bh-clone use main`
 ## CLI 一览
 
 ```text
-bh-clone init
+bh-clone init [--with-profile]    # 默认 cookie-only
 bh-clone sync [--with-profile] [--include-google]
-bh-clone ensure
+bh-clone ensure                   # 只启 clone
 bh-clone up [--sync]              # 双客户端就绪
-bh-clone use clone|main
+bh-clone use clone|main           # 只改 env，不杀进程
 
 bh-clone mcp print|json|install-grok|check
 bh-clone doctor
-bh-clone version                  # 0.2.x
+bh-clone version                  # 0.2.3
 ```
 
 ---
@@ -167,6 +169,7 @@ bh-clone version                  # 0.2.x
 ```text
 skills-bh-chrome-clone/
 ├── docs/HARD_RULES.md                # ⛔ 绝对禁止事项（Agent 必读）
+├── docs/COOKIE_ONLY.md               # 默认只复制 cookie 模型
 ├── skills/bh-chrome-clone/SKILL.md   # Agent Skill
 ├── cli/                              # bh-clone 实现
 │   ├── bin/bh-clone

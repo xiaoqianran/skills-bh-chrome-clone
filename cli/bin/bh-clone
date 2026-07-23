@@ -14,24 +14,26 @@ unset _SRC _DIR
 # shellcheck source=../lib/common.sh
 source "${ROOT}/lib/common.sh"
 
-VERSION="0.2.2"
+VERSION="0.2.3"
 
 usage() {
   cat <<USAGE
-bh-clone ${VERSION} — Chrome session twin (browser-harness + chrome-devtools)
+bh-clone ${VERSION} — cookie-only session twin (browser-harness + chrome-devtools)
 
-One automation Chrome on CDP :${BH_CDP_PORT} with cookies copied from your main
-browser. Avoids Allow-remote-debugging on daily Chrome.
+Model:
+  MAIN  = your daily Chrome (READ cookies only — never killed/rewritten)
+  CLONE = automation Chrome on :${BH_CDP_PORT} (WRITE target)
+  Flow  = MAIN --getAllCookies--> JSON --setCookies--> CLONE
 
 Usage:
   bh-clone <command> [args]
 
 Setup & session
-  init                      First-time: profile rsync + cookie sync
-  sync [--with-profile]     Export cookies from main → inject clone
-  ensure                    Start clone Chrome if not running
+  init [--with-profile]     First-time cookie-only setup (optional full rsync)
+  sync [--with-profile]     READ main cookies → WRITE clone (default: cookie-only)
+  ensure                    Start CLONE only if not running
   up [--sync]               ensure + harness env (+ optional sync)
-  use clone|main            Switch browser-harness target env
+  use clone|main            Switch browser-harness env file only (no process kill)
 
 Clients
   mcp print|json            Print chrome-devtools MCP config (clone browserUrl)
@@ -39,9 +41,14 @@ Clients
   mcp check                 Verify clone CDP is up for MCP
 
 Diagnostics
-  doctor | status           Health for paths, CDP, harness login, MCP config
+  doctor | status           Health for paths, CDP, optional probes, MCP config
   version                   Print version
   help                      This help
+
+HARD RULES (MAIN browser):
+  We never kill/restart main Chrome or rewrite its profile to "fix" sync.
+  If export fails: Allow remote debugging in MAIN yourself, then re-run sync.
+  Docs: docs/HARD_RULES.md  docs/COOKIE_ONLY.md
 
 Environment (optional):
   BH_MAIN_PROFILE   default: ~/.config/google-chrome
@@ -50,9 +57,9 @@ Environment (optional):
   BH_COOKIE_FILE    default: ~/.config/browser-harness/main-cookies.json
 
 Quick start:
-  bh-clone init
+  bh-clone init                 # cookie-only; may ask you to Allow on MAIN
   bh-clone up
-  bh-clone mcp install-grok    # then restart Grok/MCP host
+  bh-clone mcp install-grok     # then restart Grok/MCP host
   export BU_CDP_URL=http://127.0.0.1:${BH_CDP_PORT}
   browser-harness <<'PY'
   print(page_info())

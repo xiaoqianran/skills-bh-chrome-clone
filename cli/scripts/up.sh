@@ -18,8 +18,10 @@ for arg in "$@"; do
   esac
 done
 
+assert_main_clone_distinct
+
 if [[ "${SYNC}" == "1" ]]; then
-  info "up: syncing cookies first"
+  info "up: cookie-only sync first (MAIN read-only; never kill MAIN)"
   bash "${BH_CLONE_ROOT}/scripts/sync.sh"
 fi
 
@@ -27,7 +29,7 @@ bash "${BH_CLONE_ROOT}/scripts/ensure.sh"
 write_env_clone
 export BU_CDP_URL="http://127.0.0.1:${BH_CDP_PORT}"
 
-info "ready for both clients:"
+info "ready for both clients (CLONE only):"
 echo
 echo "  # browser-harness"
 echo "  export BU_CDP_URL=http://127.0.0.1:${BH_CDP_PORT}"
@@ -42,7 +44,7 @@ echo "  # apply:  bh-clone mcp install-grok   # then restart Grok/MCP"
 echo "  # MCP browserUrl must be http://127.0.0.1:${BH_CDP_PORT}"
 echo
 if cdp_ready "${BH_CDP_PORT}"; then
-  info "CDP live: http://127.0.0.1:${BH_CDP_PORT}"
+  info "CLONE CDP live: http://127.0.0.1:${BH_CDP_PORT}"
 else
-  die "CDP not live after ensure"
+  die "CLONE CDP not live after ensure (MAIN was not touched)"
 fi

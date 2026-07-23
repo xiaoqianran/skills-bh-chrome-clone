@@ -22,12 +22,15 @@ See **[HARD_RULES.md](HARD_RULES.md)**. Agents and scripts must:
 - Only automate against the clone (`:9333` / `browser-harness-chrome-clone`).
 - Treat site-login probes (e.g. bilibili in doctor) as optional, not install gates.
 
-## Data flow
+## Data flow (cookie-only default)
 
-1. Optional: rsync main profile → clone (localStorage, prefs).
-2. Required: CDP `Network.getAllCookies` on main → JSON (0600).
-3. CDP `Storage.setCookies` on clone.
+1. Required: CDP `Network.getAllCookies` on **MAIN** (read-only) → JSON (0600).  
+   On failure: stop and instruct user — **never** kill MAIN.
+2. Required: CDP `Storage.setCookies` on **CLONE** only.
+3. Optional: rsync main → clone (`--with-profile`) for localStorage/prefs (still never stops MAIN).
 4. Clients attach to `http://127.0.0.1:9333`.
+
+See [COOKIE_ONLY.md](COOKIE_ONLY.md).
 
 ## Why CDP cookie inject
 
