@@ -1,5 +1,12 @@
 # Agent notes — skills-bh-chrome-clone
 
+## 用户偏好（本机 / 本仓库）
+
+- **标签页：渐进式关闭。** 任务不再需要某个标签时，用 CDP `Target.closeTarget` **渐进关掉**，不必攒一大堆。  
+- **内存相对够用**：可以多开 clone / 多标签做并行；但用完的页仍应顺手关，避免无意义堆积。  
+- **不要**为了省内存去杀主 Chrome；只关 clone 上的 page target。  
+- 关闭后至少保留 1 个可用标签（about:blank 或当前工作页），避免浏览器无页可挂。
+
 ## 上游 browser-harness（新环境必装）
 
 本仓库 **不包含** harness 本体。新机器必须先装官方：

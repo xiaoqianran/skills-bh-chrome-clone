@@ -133,6 +133,7 @@ Treat optional site-login probes as informational unless the user asked for that
 6. **Never sync Google-family cookies by default.** No `--include-google` unless user explicitly accepts risk.
 7. **Never kill, reconfigure, or wipe the user's main Chrome.** See `docs/HARD_RULES.md`.
 8. **Default is cookie-only** (`docs/COOKIE_ONLY.md`); `--with-profile` is optional.
+9. **Tabs:** when a tab is no longer needed, **close it progressively** (`Target.closeTarget`). Memory is OK for multi-open, but do not hoard unused tabs. Keep ≥1 tab. Never kill MAIN to free memory.
 
 ## Command map
 
